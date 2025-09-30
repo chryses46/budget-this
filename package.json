@@ -6,7 +6,7 @@
     "dev": "prisma generate && next dev --turbopack --port 8080",
     "dev:https": "prisma generate && next dev --turbopack --port 44351 --experimental-https",
     "build": "prisma generate && next build --turbopack",
-    "start": "next start --port 8080",
+    "start": "next start",
     "start:https": "next start --port 44351 --experimental-https",
     "lint": "eslint",
     "db:generate": "prisma generate",
