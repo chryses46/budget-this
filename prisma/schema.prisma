@@ -1,0 +1,90 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Frequency {
+  Weekly
+  Monthly
+  Yearly
+}
+
+model User {
+  id        String   @id @default(uuid())
+  firstName String
+  lastName  String
+  email     String   @unique
+  password  String
+  emailVerified Boolean @default(false)
+  mfaEnabled Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bills          Bill[]
+  budgetCategories BudgetCategory[]
+  expenditures   Expenditure[]
+  passwordResets PasswordReset[]
+
+  @@map("users")
+}
+
+model Bill {
+  id       String    @id @default(uuid())
+  title    String
+  amount   Float
+  dayDue   Int
+  frequency Frequency
+  userId   String
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("bills")
+}
+
+model BudgetCategory {
+  id       String @id @default(uuid())
+  title    String
+  limit    Float
+  userId   String
+  user     User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  expenditures Expenditure[]
+
+  @@map("budget_categories")
+}
+
+model Expenditure {
+  id       String @id @default(uuid())
+  title    String
+  amount   Float
+  categoryId String
+  category BudgetCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("expenditures")
+}
+
+model PasswordReset {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("password_resets")
+}
