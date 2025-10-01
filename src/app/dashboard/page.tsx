@@ -98,7 +98,6 @@ export default function DashboardPage() {
         burnDownData: [] // Will be implemented when bank accounts are connected
       })
     } catch (error) {
-      console.error('Error fetching dashboard data:', error)
       setData({
         totalAccounts: 0,
         topBills: [],

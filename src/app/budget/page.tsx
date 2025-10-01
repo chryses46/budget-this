@@ -58,11 +58,9 @@ export default function BudgetPage() {
         const data = await response.json()
         setCategories(data)
       } else {
-        console.error('Failed to fetch categories')
         setCategories([])
       }
     } catch (error) {
-      console.error('Error fetching categories:', error)
       setCategories([])
     } finally {
       setIsLoading(false)
@@ -85,7 +83,6 @@ export default function BudgetPage() {
             cat.id === editingCategory.id ? updatedCategory : cat
           ))
         } else {
-          console.error('Failed to update category')
         }
       } else {
         // Create new category
@@ -99,7 +96,6 @@ export default function BudgetPage() {
           const newCategory = await response.json()
           setCategories([...categories, newCategory])
         } else {
-          console.error('Failed to create category')
         }
       }
       
@@ -107,7 +103,6 @@ export default function BudgetPage() {
       setShowCategoryForm(false)
       setEditingCategory(null)
     } catch (error) {
-      console.error('Error saving category:', error)
     }
   }
 
@@ -130,7 +125,6 @@ export default function BudgetPage() {
             )
           })))
         } else {
-          console.error('Failed to update expenditure')
         }
       } else {
         // Create new expenditure
@@ -148,7 +142,6 @@ export default function BudgetPage() {
               : cat
           ))
         } else {
-          console.error('Failed to create expenditure')
         }
       }
       
@@ -156,7 +149,6 @@ export default function BudgetPage() {
       setShowExpenditureForm(false)
       setEditingExpenditure(null)
     } catch (error) {
-      console.error('Error saving expenditure:', error)
     }
   }
 
@@ -181,10 +173,8 @@ export default function BudgetPage() {
       if (response.ok) {
         setCategories(categories.filter(cat => cat.id !== id))
       } else {
-        console.error('Failed to delete category')
       }
     } catch (error) {
-      console.error('Error deleting category:', error)
     }
   }
 
@@ -201,10 +191,8 @@ export default function BudgetPage() {
             : cat
         ))
       } else {
-        console.error('Failed to delete expenditure')
       }
     } catch (error) {
-      console.error('Error deleting expenditure:', error)
     }
   }
 

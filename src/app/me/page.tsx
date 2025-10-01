@@ -64,7 +64,6 @@ export default function MePage() {
         setPasswordError(error.error || 'Failed to update password')
       }
     } catch (error) {
-      console.error('Error updating password:', error)
       setPasswordError('Failed to update password')
     } finally {
       setIsSaving(false)

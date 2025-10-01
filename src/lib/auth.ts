@@ -16,13 +16,6 @@ export const authOptions: NextAuthOptions = {
         mfaVerified: { label: 'MFA Verified', type: 'text' }
       },
       async authorize(credentials) {
-        console.log('NextAuth authorize called with:', { 
-          email: credentials?.email, 
-          hasPassword: !!credentials?.password,
-          mfaCode: credentials?.mfaCode,
-          userId: credentials?.userId,
-          mfaVerified: credentials?.mfaVerified
-        })
         
         if (!credentials?.email) {
           return null
@@ -33,35 +26,18 @@ export const authOptions: NextAuthOptions = {
           where: { email: credentials.email }
         })
 
-        console.log('User lookup result:', { 
-          email: credentials.email, 
-          userFound: !!user, 
-          userId: user?.id,
-          emailVerified: user?.emailVerified,
-          mfaEnabled: user?.mfaEnabled
-        })
 
         if (!user) {
-          console.log('User not found for email:', credentials.email)
           return null
         }
 
         // Check if email is verified
         if (!user.emailVerified) {
-          console.log('User email not verified:', user.email)
           return null
         }
 
         // For email-only login (no password or empty password), allow if MFA is verified
         if ((!credentials.password || credentials.password === '') && credentials.mfaVerified === 'true') {
-          console.log('Email-only login with MFA verification for user:', user.id)
-          console.log('Returning user object:', {
-            id: user.id,
-            email: user.email,
-            name: `${user.firstName} ${user.lastName}`,
-            firstName: user.firstName,
-            lastName: user.lastName
-          })
           return {
             id: user.id,
             email: user.email,
@@ -71,12 +47,6 @@ export const authOptions: NextAuthOptions = {
           }
         }
 
-        console.log('Email-only login conditions not met:', {
-          hasPassword: !!credentials.password,
-          passwordValue: credentials.password,
-          mfaVerified: credentials.mfaVerified,
-          mfaVerifiedType: typeof credentials.mfaVerified
-        })
 
         // For password-based login, verify password
         if (credentials.password) {
@@ -91,14 +61,11 @@ export const authOptions: NextAuthOptions = {
             // Check if this is an MFA bypass (when mfaVerified is provided)
             if (!credentials.mfaVerified || credentials.mfaVerified !== 'true') {
               // MFA is enabled but not properly verified, deny access
-              console.log('MFA enabled but not verified:', { mfaVerified: credentials.mfaVerified, mfaCode: credentials.mfaCode, userId: credentials.userId })
               return null
             }
-            console.log('MFA bypass successful for user:', user.id)
           }
         }
 
-        console.log('Reaching final return statement for user:', user.id)
         return {
           id: user.id,
           email: user.email,

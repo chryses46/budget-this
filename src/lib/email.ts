@@ -31,10 +31,8 @@ export async function sendMfaCode(email: string, code: string): Promise<void> {
   }
 
   try {
-    const result = await transporter.sendMail(mailOptions)
-    console.log('MFA email sent successfully:', result.messageId)
+    await transporter.sendMail(mailOptions)
   } catch (error) {
-    console.error('Failed to send MFA email:', error)
     throw error
   }
 }

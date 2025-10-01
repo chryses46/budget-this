@@ -134,12 +134,6 @@ function LoginForm() {
         return
       }
       
-      console.log('Calling signIn with:', { 
-        email: storedCredentials.email, 
-        hasPassword: !!storedCredentials.password, 
-        mfaVerified: 'true',
-        userId: userId
-      })
       
       // For email-only login, we need to handle it differently
       if (!storedCredentials.password) {

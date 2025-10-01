@@ -29,7 +29,6 @@ export async function PUT(
 
     return NextResponse.json(category)
   } catch (error) {
-    console.error('Error updating budget category:', error)
     return NextResponse.json(
       { error: 'Failed to update budget category' },
       { status: 500 }
@@ -59,7 +58,6 @@ export async function DELETE(
 
     return NextResponse.json({ message: 'Budget category deleted successfully' })
   } catch (error) {
-    console.error('Error deleting budget category:', error)
     return NextResponse.json(
       { error: 'Failed to delete budget category' },
       { status: 500 }

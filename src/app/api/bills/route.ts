@@ -22,7 +22,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(bills)
   } catch (error) {
-    console.error('Error fetching bills:', error)
     return NextResponse.json(
       { error: 'Failed to fetch bills' },
       { status: 500 }
@@ -56,7 +55,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(bill)
   } catch (error) {
-    console.error('Error creating bill:', error)
     return NextResponse.json(
       { error: 'Failed to create bill' },
       { status: 500 }

@@ -22,7 +22,6 @@ export function ThemeToggle() {
         <button
           key={value}
           onClick={() => {
-            console.log('Theme toggle clicked:', value) // Debug log
             setTheme(value)
           }}
           className={`flex items-center space-x-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${

@@ -49,9 +49,7 @@ export async function POST(request: NextRequest) {
     // Send MFA code via email
     try {
       await sendMfaCode(email, mfaCode)
-      console.log(`MFA code sent to ${email}: ${mfaCode}`)
     } catch (emailError) {
-      console.error('Failed to send MFA email:', emailError)
       return NextResponse.json(
         { error: 'Failed to send verification code' },
         { status: 500 }
@@ -64,7 +62,6 @@ export async function POST(request: NextRequest) {
       userId: user.id
     })
   } catch (error) {
-    console.error('Email login error:', error)
     return NextResponse.json(
       { error: 'Email login failed' },
       { status: 500 }
