@@ -1,5 +1,7 @@
 import nodemailer from 'nodemailer'
 
+const fromEmail = "verify@budget-this.com"
+
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: parseInt(process.env.SMTP_PORT || '587'),
@@ -12,7 +14,7 @@ const transporter = nodemailer.createTransport({
 
 export async function sendMfaCode(email: string, code: string): Promise<void> {
   const mailOptions = {
-    from: process.env.SMTP_USER,
+    from: fromEmail,
     to: email,
     subject: 'Your MFA Code - Budget This',
     html: `
@@ -33,7 +35,7 @@ export async function sendMfaCode(email: string, code: string): Promise<void> {
 
 export async function sendVerificationEmail(email: string, code: string): Promise<void> {
   const mailOptions = {
-    from: process.env.SMTP_USER,
+    from: fromEmail,
     to: email,
     subject: 'Verify Your Email - Budget This',
     html: `
@@ -54,7 +56,7 @@ export async function sendVerificationEmail(email: string, code: string): Promis
 
 export async function sendPasswordResetEmail(email: string, resetUrl: string): Promise<void> {
   const mailOptions = {
-    from: process.env.SMTP_USER,
+    from: fromEmail,
     to: email,
     subject: 'Reset Your Password - Budget This',
     html: `
