@@ -73,8 +73,17 @@ export async function POST(request: NextRequest) {
     // Set JWT token in HTTP-only cookie
     response.cookies.set('auth-token', token, {
       httpOnly: true,
-      secure: true, // Always secure for mobile compatibility
-      sameSite: 'none', // More permissive for mobile browsers
+      secure: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 7 * 24 * 60 * 60 // 7 days
+    })
+
+    // Also set a non-httpOnly cookie as fallback for mobile
+    response.cookies.set('auth-token-fallback', token, {
+      httpOnly: false,
+      secure: true,
+      sameSite: 'lax',
       path: '/',
       maxAge: 7 * 24 * 60 * 60 // 7 days
     })

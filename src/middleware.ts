@@ -16,20 +16,25 @@ export function middleware(request: NextRequest) {
   
   // Debug logging for mobile issues
   const authToken = request.cookies.get('auth-token')?.value
+  const fallbackToken = request.cookies.get('auth-token-fallback')?.value
+  const hasAuth = !!authToken || !!fallbackToken
+  
   console.log('Middleware - Path:', pathname)
   console.log('Middleware - Auth token present:', !!authToken)
+  console.log('Middleware - Fallback token present:', !!fallbackToken)
+  console.log('Middleware - Has auth:', hasAuth)
   console.log('Middleware - User agent:', request.headers.get('user-agent'))
   console.log('Middleware - All cookies:', request.cookies.getAll().map(c => c.name))
   console.log('Middleware - Is protected route:', isProtectedRoute)
   
   // If accessing a protected route without auth, redirect to login
-  if (isProtectedRoute && !authToken) {
+  if (isProtectedRoute && !hasAuth) {
     console.log('Middleware - Redirecting to login due to missing auth token')
     return NextResponse.redirect(new URL('/login', request.url))
   }
   
   // If accessing login/register with auth, redirect to dashboard
-  if (isPublicRoute && authToken) {
+  if (isPublicRoute && hasAuth) {
     console.log('Middleware - Redirecting to dashboard due to existing auth token')
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }

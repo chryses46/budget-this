@@ -45,21 +45,33 @@ export async function POST(request: NextRequest) {
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email
-      }
+      },
+      token: token // Include token in response for mobile fallback
     })
 
+    // Try multiple cookie configurations for mobile compatibility
     response.cookies.set('auth-token', token, {
       httpOnly: true,
-      secure: true, // Always secure for mobile compatibility
-      sameSite: 'none', // More permissive for mobile browsers
+      secure: true,
+      sameSite: 'lax', // Try lax first
+      path: '/',
+      maxAge: 7 * 24 * 60 * 60 // 7 days
+    })
+
+    // Also set a non-httpOnly cookie as fallback for mobile
+    response.cookies.set('auth-token-fallback', token, {
+      httpOnly: false,
+      secure: true,
+      sameSite: 'lax',
       path: '/',
       maxAge: 7 * 24 * 60 * 60 // 7 days
     })
 
     // Debug logging
-    console.log('MFA verification successful, setting cookie for user:', user.id)
+    console.log('MFA verification successful, setting cookies for user:', user.id)
     console.log('User agent:', request.headers.get('user-agent'))
-    console.log('Cookie set with sameSite: none, secure: true, path: /')
+    console.log('Cookie set with sameSite: lax, secure: true, path: /')
+    console.log('Also set fallback cookie for mobile compatibility')
 
     return response
   } catch (error) {
