@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { signIn } from 'next-auth/react'
 import Link from 'next/link'
 import { loginSchema, emailLoginSchema, LoginInput, EmailLoginInput } from '@/lib/validations'
+import { z } from 'zod'
 import { cn } from '@/lib/utils'
 
 export default function LoginPage() {
@@ -13,6 +14,7 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [requiresMfa, setRequiresMfa] = useState(false)
   const [userId, setUserId] = useState('')
+  const [storedCredentials, setStoredCredentials] = useState<{email: string, password: string} | null>(null)
 
   const loginForm = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -23,7 +25,7 @@ export default function LoginPage() {
   })
 
   const mfaForm = useForm<{ mfaCode: string }>({
-    resolver: zodResolver(emailLoginSchema.pick({ code: true }).transform(data => ({ mfaCode: data.code }))),
+    resolver: zodResolver(z.object({ mfaCode: z.string().min(1, 'MFA code is required') })),
     defaultValues: {
       mfaCode: ''
     }
@@ -41,6 +43,25 @@ export default function LoginPage() {
       setIsLoading(true)
       setError('')
 
+      // First, check if user exists and has MFA enabled
+      const userResponse = await fetch('/api/auth/check-mfa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: data.email })
+      })
+
+      if (userResponse.ok) {
+        const userData = await userResponse.json()
+        if (userData.mfaEnabled) {
+          // User has MFA enabled, show MFA form
+          setRequiresMfa(true)
+          setUserId(userData.userId)
+          setStoredCredentials({ email: data.email, password: data.password })
+          return
+        }
+      }
+
+      // No MFA required, proceed with normal login
       const result = await signIn('credentials', {
         email: data.email,
         password: data.password,
@@ -53,14 +74,6 @@ export default function LoginPage() {
       }
 
       if (result?.ok) {
-        // Check if MFA is required
-        if (result.requiresMfa) {
-          setRequiresMfa(true)
-          setUserId(result.userId || '')
-          return
-        }
-        
-        // Login successful, redirect to dashboard
         window.location.href = '/dashboard'
       }
     } catch (err) {
@@ -75,20 +88,71 @@ export default function LoginPage() {
       setIsLoading(true)
       setError('')
 
-      const result = await signIn('credentials', {
-        email: loginForm.getValues('email'),
-        password: loginForm.getValues('password'),
-        mfaCode: data.mfaCode,
-        userId: userId,
-        redirect: false
+      // Verify MFA code and create session
+      const response = await fetch('/api/auth/verify-mfa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: userId,
+          mfaCode: data.mfaCode
+        })
       })
 
-      if (result?.error) {
+      if (!response.ok) {
         setError('Invalid MFA code')
         return
       }
 
-      if (result?.ok) {
+      const result = await response.json()
+      
+      // MFA successful, now create NextAuth session
+      if (!storedCredentials) {
+        setError('Credentials not found. Please try logging in again.')
+        return
+      }
+      
+      console.log('Calling signIn with:', { 
+        email: storedCredentials.email, 
+        hasPassword: !!storedCredentials.password, 
+        mfaVerified: 'true' 
+      })
+      
+      // For email-only login, we need to handle it differently
+      if (!storedCredentials.password) {
+        // Email-only login - create session directly via API
+        const sessionResponse = await fetch('/api/auth/create-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: userId,
+            email: storedCredentials.email
+          })
+        })
+        
+        if (!sessionResponse.ok) {
+          setError('Failed to create session')
+          return
+        }
+        
+        // Redirect to dashboard
+        window.location.href = '/dashboard'
+        return
+      }
+      
+      // Password-based login - use NextAuth
+      const signInResult = await signIn('credentials', {
+        email: storedCredentials.email,
+        password: storedCredentials.password,
+        mfaVerified: 'true',
+        redirect: false
+      })
+
+      if (signInResult?.error) {
+        setError('Failed to create session')
+        return
+      }
+
+      if (signInResult?.ok) {
         window.location.href = '/dashboard'
       }
     } catch (err) {
@@ -118,6 +182,8 @@ export default function LoginPage() {
 
       setRequiresMfa(true)
       setUserId(result.userId)
+      // Store email for email-only login (no password needed)
+      setStoredCredentials({ email: data.email, password: '' })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send MFA code')
     } finally {

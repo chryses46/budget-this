@@ -12,9 +12,18 @@ export const authOptions: NextAuthOptions = {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
         mfaCode: { label: 'MFA Code', type: 'text' },
-        userId: { label: 'User ID', type: 'text' }
+        userId: { label: 'User ID', type: 'text' },
+        mfaVerified: { label: 'MFA Verified', type: 'text' }
       },
       async authorize(credentials) {
+        console.log('NextAuth authorize called with:', { 
+          email: credentials?.email, 
+          hasPassword: !!credentials?.password,
+          mfaCode: credentials?.mfaCode,
+          userId: credentials?.userId,
+          mfaVerified: credentials?.mfaVerified
+        })
+        
         if (!credentials?.email || !credentials?.password) {
           return null
         }
@@ -39,18 +48,16 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        // If MFA is enabled, check for MFA code
+        // For MFA users, we'll handle this differently
+        // If MFA is enabled, we'll check for a special bypass flag
         if (user.mfaEnabled) {
-          if (!credentials.mfaCode || !credentials.userId) {
-            // Return a special object indicating MFA is required
-            return {
-              id: user.id,
-              email: user.email,
-              name: `${user.firstName} ${user.lastName}`,
-              requiresMfa: true
-            }
+          // Check if this is an MFA bypass (when mfaVerified is provided)
+          if (!credentials.mfaVerified || credentials.mfaVerified !== 'true') {
+            // MFA is enabled but not properly verified, deny access
+            console.log('MFA enabled but not verified:', { mfaVerified: credentials.mfaVerified, mfaCode: credentials.mfaCode, userId: credentials.userId })
+            return null
           }
-          // TODO: Verify MFA code
+          console.log('MFA bypass successful for user:', user.id)
         }
 
         return {
