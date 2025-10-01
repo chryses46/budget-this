@@ -25,14 +25,38 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // For now, accept any 6-digit code
-    // TODO: Implement proper MFA code verification with database storage
+    // Validate MFA code format
     if (mfaCode.length !== 6 || !/^\d+$/.test(mfaCode)) {
       return NextResponse.json(
         { error: 'Invalid MFA code format' },
         { status: 400 }
       )
     }
+
+    // Find valid MFA code in database
+    const validMfaCode = await prisma.mfaCode.findFirst({
+      where: {
+        userId: userId,
+        code: mfaCode,
+        used: false,
+        expiresAt: {
+          gt: new Date() // Not expired
+        }
+      }
+    })
+
+    if (!validMfaCode) {
+      return NextResponse.json(
+        { error: 'Invalid or expired MFA code' },
+        { status: 400 }
+      )
+    }
+
+    // Mark MFA code as used
+    await prisma.mfaCode.update({
+      where: { id: validMfaCode.id },
+      data: { used: true }
+    })
 
     // MFA code is valid - create a temporary session
     // We'll use a simple approach by setting a cookie that indicates MFA is verified

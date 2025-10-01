@@ -1,15 +1,19 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { signIn } from 'next-auth/react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { loginSchema, emailLoginSchema, LoginInput, EmailLoginInput } from '@/lib/validations'
 import { z } from 'zod'
 import { cn } from '@/lib/utils'
 
-export default function LoginPage() {
+function LoginForm() {
+  const searchParams = useSearchParams()
+  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard'
+  
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [requiresMfa, setRequiresMfa] = useState(false)
@@ -65,7 +69,8 @@ export default function LoginPage() {
       const result = await signIn('credentials', {
         email: data.email,
         password: data.password,
-        redirect: false
+        redirect: false,
+        callbackUrl: callbackUrl
       })
 
       if (result?.error) {
@@ -74,7 +79,7 @@ export default function LoginPage() {
       }
 
       if (result?.ok) {
-        window.location.href = '/dashboard'
+        window.location.href = callbackUrl
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')
@@ -135,7 +140,7 @@ export default function LoginPage() {
         }
         
         // Redirect to dashboard
-        window.location.href = '/dashboard'
+        window.location.href = callbackUrl
         return
       }
       
@@ -144,7 +149,8 @@ export default function LoginPage() {
         email: storedCredentials.email,
         password: storedCredentials.password,
         mfaVerified: 'true',
-        redirect: false
+        redirect: false,
+        callbackUrl: callbackUrl
       })
 
       if (signInResult?.error) {
@@ -153,7 +159,7 @@ export default function LoginPage() {
       }
 
       if (signInResult?.ok) {
-        window.location.href = '/dashboard'
+        window.location.href = callbackUrl
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'MFA verification failed')
@@ -378,5 +384,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <LoginForm />
+    </Suspense>
   )
 }

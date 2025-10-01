@@ -44,6 +44,7 @@ model User {
   passwordResets PasswordReset[]
   accounts       Account[]
   transactions   Transaction[]
+  mfaCodes       MfaCode[]
 
   @@map("users")
 }
@@ -100,6 +101,18 @@ model PasswordReset {
   createdAt DateTime @default(now())
 
   @@map("password_resets")
+}
+
+model MfaCode {
+  id        String   @id @default(uuid())
+  code      String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("mfa_codes")
 }
 
 model Account {
