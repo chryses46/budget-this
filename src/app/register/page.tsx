@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
+import { signIn } from 'next-auth/react'
 import { registerSchema, RegisterInput } from '@/lib/validations'
 import { cn } from '@/lib/utils'
 
@@ -12,6 +13,8 @@ export default function RegisterPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [userId, setUserId] = useState('')
+  const [isVerifying, setIsVerifying] = useState(false)
+  const [verificationSuccess, setVerificationSuccess] = useState(false)
 
   const {
     register,
@@ -51,7 +54,7 @@ export default function RegisterPage() {
 
   const handleEmailVerification = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    setIsLoading(true)
+    setIsVerifying(true)
     setError('')
 
     const formData = new FormData(e.currentTarget)
@@ -72,13 +75,61 @@ export default function RegisterPage() {
         throw new Error(result.error || 'Email verification failed')
       }
 
-      // Redirect to login
-      window.location.href = '/login'
+      // Show success message
+      setVerificationSuccess(true)
+
+      // Automatically log the user in
+      const signInResult = await signIn('credentials', {
+        email: result.user.email,
+        password: '', // Empty password for email-only login
+        mfaVerified: 'true',
+        userId: result.user.id,
+        redirect: false,
+        callbackUrl: '/dashboard'
+      })
+
+      if (signInResult?.error) {
+        setError('Email verified but failed to log you in. Please try logging in manually.')
+        return
+      }
+
+      // Redirect to dashboard after a short delay to show success message
+      setTimeout(() => {
+        window.location.href = '/dashboard'
+      }, 2000)
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Email verification failed')
     } finally {
-      setIsLoading(false)
+      setIsVerifying(false)
     }
+  }
+
+  if (verificationSuccess) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+        <div className="sm:mx-auto sm:w-full sm:max-w-md">
+          <div className="bg-white dark:bg-gray-800 py-8 px-4 shadow sm:rounded-lg sm:px-10 text-center">
+            <div className="mb-4">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 dark:bg-green-900">
+                <svg className="h-6 w-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+              Account verified!
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              Loading your dashboard...
+            </p>
+            <div className="flex justify-center">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (success) {
@@ -119,10 +170,10 @@ export default function RegisterPage() {
               <div>
                 <button
                   type="submit"
-                  disabled={isLoading}
+                  disabled={isVerifying}
                   className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                 >
-                  {isLoading ? 'Verifying...' : 'Verify Email'}
+                  {isVerifying ? 'Verifying...' : 'Verify Email'}
                 </button>
               </div>
             </form>

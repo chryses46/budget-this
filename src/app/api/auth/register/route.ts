@@ -38,8 +38,19 @@ export async function POST(request: NextRequest) {
     // Generate verification code
     const verificationCode = await generateMfaCode()
     
-    // TODO: Store verification code in database with expiration
-    // For now, we'll just send it via email
+    // Store verification code in database with expiration (24 hours)
+    const expiresAt = new Date()
+    expiresAt.setHours(expiresAt.getHours() + 24)
+    
+    await prisma.mfaCode.create({
+      data: {
+        code: verificationCode,
+        userId: user.id,
+        expiresAt: expiresAt
+      }
+    })
+    
+    // Send verification email
     await sendVerificationEmail(email, verificationCode)
 
     return NextResponse.json({

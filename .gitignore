@@ -43,4 +43,3 @@ next-env.d.ts
 env.example
 public/*
 /src/generated/prisma
-.gitignore
