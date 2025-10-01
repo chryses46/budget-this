@@ -52,8 +52,14 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
+      path: '/',
       maxAge: 7 * 24 * 60 * 60 // 7 days
     })
+
+    // Debug logging
+    console.log('MFA verification successful, setting cookie for user:', user.id)
+    console.log('User agent:', request.headers.get('user-agent'))
+    console.log('Cookie set with sameSite: lax, path: /')
 
     return response
   } catch (error) {

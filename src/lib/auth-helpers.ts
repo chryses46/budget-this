@@ -5,6 +5,11 @@ export async function getAuthenticatedUserId(request: NextRequest): Promise<stri
   try {
     const authToken = request.cookies.get('auth-token')?.value
 
+    // Debug logging for mobile issues
+    console.log('Auth token present:', !!authToken)
+    console.log('User agent:', request.headers.get('user-agent'))
+    console.log('All cookies:', request.cookies.getAll().map(c => c.name))
+
     if (!authToken) {
       return null
     }
@@ -12,9 +17,11 @@ export async function getAuthenticatedUserId(request: NextRequest): Promise<stri
     // Verify JWT token
     const payload = verifyToken(authToken)
     if (!payload) {
+      console.log('JWT verification failed')
       return null
     }
 
+    console.log('JWT verification successful for user:', payload.userId)
     return payload.userId
   } catch (error) {
     console.error('Error extracting user ID from token:', error)
