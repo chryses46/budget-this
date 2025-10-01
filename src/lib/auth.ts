@@ -24,7 +24,7 @@ export const authOptions: NextAuthOptions = {
           mfaVerified: credentials?.mfaVerified
         })
         
-        if (!credentials?.email || !credentials?.password) {
+        if (!credentials?.email) {
           return null
         }
 
@@ -33,18 +33,35 @@ export const authOptions: NextAuthOptions = {
           where: { email: credentials.email }
         })
 
+        console.log('User lookup result:', { 
+          email: credentials.email, 
+          userFound: !!user, 
+          userId: user?.id,
+          emailVerified: user?.emailVerified,
+          mfaEnabled: user?.mfaEnabled
+        })
+
         if (!user) {
+          console.log('User not found for email:', credentials.email)
           return null
         }
 
         // Check if email is verified
         if (!user.emailVerified) {
+          console.log('User email not verified:', user.email)
           return null
         }
 
         // For email-only login (no password or empty password), allow if MFA is verified
         if ((!credentials.password || credentials.password === '') && credentials.mfaVerified === 'true') {
           console.log('Email-only login with MFA verification for user:', user.id)
+          console.log('Returning user object:', {
+            id: user.id,
+            email: user.email,
+            name: `${user.firstName} ${user.lastName}`,
+            firstName: user.firstName,
+            lastName: user.lastName
+          })
           return {
             id: user.id,
             email: user.email,
@@ -53,6 +70,13 @@ export const authOptions: NextAuthOptions = {
             lastName: user.lastName
           }
         }
+
+        console.log('Email-only login conditions not met:', {
+          hasPassword: !!credentials.password,
+          passwordValue: credentials.password,
+          mfaVerified: credentials.mfaVerified,
+          mfaVerifiedType: typeof credentials.mfaVerified
+        })
 
         // For password-based login, verify password
         if (credentials.password) {
@@ -74,6 +98,7 @@ export const authOptions: NextAuthOptions = {
           }
         }
 
+        console.log('Reaching final return statement for user:', user.id)
         return {
           id: user.id,
           email: user.email,
