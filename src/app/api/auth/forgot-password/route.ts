@@ -47,7 +47,6 @@ export async function POST(request: NextRequest) {
       message: 'If an account with that email exists, we sent a password reset link.'
     })
   } catch (error) {
-    console.error('Forgot password error:', error)
     return NextResponse.json(
       { error: 'Failed to process password reset request' },
       { status: 500 }

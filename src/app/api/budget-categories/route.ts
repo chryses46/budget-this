@@ -27,7 +27,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(categories)
   } catch (error) {
-    console.error('Error fetching budget categories:', error)
     return NextResponse.json(
       { error: 'Failed to fetch budget categories' },
       { status: 500 }
@@ -59,7 +58,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(category)
   } catch (error) {
-    console.error('Error creating budget category:', error)
     return NextResponse.json(
       { error: 'Failed to create budget category' },
       { status: 500 }

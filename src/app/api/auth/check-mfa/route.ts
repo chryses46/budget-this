@@ -30,7 +30,6 @@ export async function POST(request: NextRequest) {
       mfaEnabled: user.mfaEnabled
     })
   } catch (error) {
-    console.error('Error checking MFA status:', error)
     return NextResponse.json(
       { error: 'Failed to check MFA status' },
       { status: 500 }

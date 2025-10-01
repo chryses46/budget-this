@@ -49,11 +49,9 @@ export default function BillsPage() {
         const data = await response.json()
         setBills(data)
       } else {
-        console.error('Failed to fetch bills')
         setBills([])
       }
     } catch (error) {
-      console.error('Error fetching bills:', error)
       setBills([])
     } finally {
       setIsLoading(false)
@@ -76,7 +74,6 @@ export default function BillsPage() {
             bill.id === editingBill.id ? updatedBill : bill
           ))
         } else {
-          console.error('Failed to update bill')
         }
       } else {
         // Create new bill
@@ -90,7 +87,6 @@ export default function BillsPage() {
           const newBill = await response.json()
           setBills([...bills, newBill])
         } else {
-          console.error('Failed to create bill')
         }
       }
       
@@ -98,7 +94,6 @@ export default function BillsPage() {
       setShowForm(false)
       setEditingBill(null)
     } catch (error) {
-      console.error('Error saving bill:', error)
     }
   }
 
@@ -117,10 +112,8 @@ export default function BillsPage() {
       if (response.ok) {
         setBills(bills.filter(bill => bill.id !== id))
       } else {
-        console.error('Failed to delete bill')
       }
     } catch (error) {
-      console.error('Error deleting bill:', error)
     }
   }
 

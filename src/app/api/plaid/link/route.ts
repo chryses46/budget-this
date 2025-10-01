@@ -17,7 +17,6 @@ export async function POST(request: NextRequest) {
       message: 'Plaid integration coming soon'
     })
   } catch (error) {
-    console.error('Error creating Plaid link token:', error)
     return NextResponse.json(
       { error: 'Failed to create Plaid link token' },
       { status: 500 }

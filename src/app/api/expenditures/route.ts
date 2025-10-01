@@ -27,7 +27,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(expenditures)
   } catch (error) {
-    console.error('Error fetching expenditures:', error)
     return NextResponse.json(
       { error: 'Failed to fetch expenditures' },
       { status: 500 }
@@ -60,7 +59,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(expenditure)
   } catch (error) {
-    console.error('Error creating expenditure:', error)
     return NextResponse.json(
       { error: 'Failed to create expenditure' },
       { status: 500 }

@@ -29,7 +29,6 @@ export async function PUT(
 
     return NextResponse.json(expenditure)
   } catch (error) {
-    console.error('Error updating expenditure:', error)
     return NextResponse.json(
       { error: 'Failed to update expenditure' },
       { status: 500 }
@@ -59,7 +58,6 @@ export async function DELETE(
 
     return NextResponse.json({ message: 'Expenditure deleted successfully' })
   } catch (error) {
-    console.error('Error deleting expenditure:', error)
     return NextResponse.json(
       { error: 'Failed to delete expenditure' },
       { status: 500 }
