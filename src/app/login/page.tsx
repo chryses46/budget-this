@@ -57,11 +57,29 @@ function LoginForm() {
       if (userResponse.ok) {
         const userData = await userResponse.json()
         if (userData.mfaEnabled) {
-          // User has MFA enabled, show MFA form
-          setRequiresMfa(true)
-          setUserId(userData.userId)
-          setStoredCredentials({ email: data.email, password: data.password })
-          return
+          // User has MFA enabled, send MFA code and show MFA form
+          try {
+            // Send MFA code for password-based login
+            const mfaResponse = await fetch('/api/auth/email-login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: data.email })
+            })
+
+            if (!mfaResponse.ok) {
+              const errorData = await mfaResponse.json()
+              setError(errorData.error || 'Failed to send MFA code')
+              return
+            }
+
+            setRequiresMfa(true)
+            setUserId(userData.userId)
+            setStoredCredentials({ email: data.email, password: data.password })
+            return
+          } catch (mfaError) {
+            setError('Failed to send MFA code')
+            return
+          }
         }
       }
 

@@ -42,8 +42,8 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        // For email-only login (no password), allow if MFA is verified
-        if (!credentials.password && credentials.mfaVerified === 'true') {
+        // For email-only login (no password or empty password), allow if MFA is verified
+        if ((!credentials.password || credentials.password === '') && credentials.mfaVerified === 'true') {
           console.log('Email-only login with MFA verification for user:', user.id)
           return {
             id: user.id,

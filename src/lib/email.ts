@@ -24,13 +24,19 @@ export async function sendMfaCode(email: string, code: string): Promise<void> {
         <div style="background-color: #f4f4f4; padding: 20px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; margin: 20px 0;">
           ${code}
         </div>
-        <p>This code will expire in 10 minutes.</p>
+        <p>This code will expire in 5 minutes.</p>
         <p>If you didn't request this code, please ignore this email.</p>
       </div>
     `,
   }
 
-  await transporter.sendMail(mailOptions)
+  try {
+    const result = await transporter.sendMail(mailOptions)
+    console.log('MFA email sent successfully:', result.messageId)
+  } catch (error) {
+    console.error('Failed to send MFA email:', error)
+    throw error
+  }
 }
 
 export async function sendVerificationEmail(email: string, code: string): Promise<void> {
