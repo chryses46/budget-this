@@ -50,16 +50,30 @@ export async function getSession(): Promise<SessionPayload | null> {
 
 export async function setSessionCookie(session: string) {
   const cookieStore = await cookies()
-  cookieStore.set('session', session, {
+  const cookieOptions = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: true, // Always secure for Heroku (HTTPS)
+    sameSite: 'lax' as const,
     path: '/',
-    maxAge: 7 * 24 * 60 * 60 // 7 days
-  })
+    maxAge: 7 * 24 * 60 * 60, // 7 days
+    domain: process.env.NODE_ENV === 'production' ? '.budget-this.com' : undefined // Allow subdomain access
+  }
+  
+  console.log('setSessionCookie - Environment:', process.env.NODE_ENV)
+  console.log('setSessionCookie - Cookie options:', cookieOptions)
+  
+  cookieStore.set('session', session, cookieOptions)
 }
 
 export async function deleteSessionCookie() {
   const cookieStore = await cookies()
-  cookieStore.delete('session')
+  // Delete with same options as set
+  cookieStore.set('session', '', {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 0, // Expire immediately
+    domain: process.env.NODE_ENV === 'production' ? '.budget-this.com' : undefined
+  })
 }
