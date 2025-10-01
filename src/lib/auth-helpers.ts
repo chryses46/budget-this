@@ -5,11 +5,13 @@ export async function getAuthenticatedUserId(request: NextRequest): Promise<stri
   try {
     const authToken = request.cookies.get('auth-token')?.value
     const fallbackToken = request.cookies.get('auth-token-fallback')?.value
-    const token = authToken || fallbackToken
+    const authHeader = request.headers.get('authorization')?.replace('Bearer ', '')
+    const token = authToken || fallbackToken || authHeader
 
     // Debug logging for mobile issues
     console.log('Auth token present:', !!authToken)
     console.log('Fallback token present:', !!fallbackToken)
+    console.log('Auth header present:', !!authHeader)
     console.log('User agent:', request.headers.get('user-agent'))
     console.log('All cookies:', request.cookies.getAll().map(c => c.name))
 

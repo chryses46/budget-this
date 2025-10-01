@@ -17,11 +17,13 @@ export function middleware(request: NextRequest) {
   // Debug logging for mobile issues
   const authToken = request.cookies.get('auth-token')?.value
   const fallbackToken = request.cookies.get('auth-token-fallback')?.value
-  const hasAuth = !!authToken || !!fallbackToken
+  const authHeader = request.headers.get('authorization')?.replace('Bearer ', '')
+  const hasAuth = !!authToken || !!fallbackToken || !!authHeader
   
   console.log('Middleware - Path:', pathname)
   console.log('Middleware - Auth token present:', !!authToken)
   console.log('Middleware - Fallback token present:', !!fallbackToken)
+  console.log('Middleware - Auth header present:', !!authHeader)
   console.log('Middleware - Has auth:', hasAuth)
   console.log('Middleware - User agent:', request.headers.get('user-agent'))
   console.log('Middleware - All cookies:', request.cookies.getAll().map(c => c.name))

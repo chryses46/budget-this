@@ -46,14 +46,14 @@ export async function POST(request: NextRequest) {
         lastName: user.lastName,
         email: user.email
       },
-      token: token // Include token in response for mobile fallback
+      token: token // Include token in response for mobile localStorage fallback
     })
 
     // Try multiple cookie configurations for mobile compatibility
     response.cookies.set('auth-token', token, {
       httpOnly: true,
       secure: true,
-      sameSite: 'lax', // Try lax first
+      sameSite: 'lax',
       path: '/',
       maxAge: 7 * 24 * 60 * 60 // 7 days
     })
@@ -72,6 +72,7 @@ export async function POST(request: NextRequest) {
     console.log('User agent:', request.headers.get('user-agent'))
     console.log('Cookie set with sameSite: lax, secure: true, path: /')
     console.log('Also set fallback cookie for mobile compatibility')
+    console.log('Token included in response for localStorage fallback')
 
     return response
   } catch (error) {
