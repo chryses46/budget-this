@@ -35,11 +35,17 @@ export async function getSession(): Promise<SessionPayload | null> {
   const cookieStore = await cookies()
   const session = cookieStore.get('session')?.value
 
+  console.log('getSession - Cookie found:', !!session)
+  console.log('getSession - Session length:', session?.length || 0)
+
   if (!session) {
+    console.log('getSession - No session cookie found')
     return null
   }
 
-  return verifySession(session)
+  const verified = await verifySession(session)
+  console.log('getSession - Session verified:', !!verified)
+  return verified
 }
 
 export async function setSessionCookie(session: string) {

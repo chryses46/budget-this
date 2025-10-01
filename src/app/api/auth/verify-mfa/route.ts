@@ -39,6 +39,8 @@ export async function POST(request: NextRequest) {
 
     // Set session cookie
     await setSessionCookie(session)
+    console.log('MFA verification successful, session created:', session.substring(0, 50) + '...')
+    console.log('Session cookie should be set')
 
     return NextResponse.json({
       message: 'MFA verification successful',
