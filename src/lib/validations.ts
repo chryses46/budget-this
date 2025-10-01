@@ -48,6 +48,38 @@ export const expenditureSchema = z.object({
 
 export const updateExpenditureSchema = expenditureSchema.partial()
 
+// Plaid validation schemas
+export const plaidLinkSchema = z.object({
+  publicToken: z.string().min(1),
+})
+
+export const accountSchema = z.object({
+  plaidAccountId: z.string().min(1),
+  name: z.string().min(1),
+  type: z.string().min(1),
+  subtype: z.string().optional(),
+  institution: z.string().min(1),
+  institutionId: z.string().min(1),
+})
+
+export const transactionSchema = z.object({
+  plaidTransactionId: z.string().min(1),
+  accountId: z.string().uuid(),
+  amount: z.number(),
+  type: z.enum(['DEBIT', 'CREDIT']),
+  status: z.enum(['PENDING', 'POSTED', 'CANCELLED']),
+  date: z.string().datetime(),
+  name: z.string().min(1),
+  merchantName: z.string().optional(),
+  category: z.string().optional(),
+  subcategory: z.string().optional(),
+  location: z.any().optional(), // JSON object
+  paymentChannel: z.string().optional(),
+  pending: z.boolean().optional(),
+  isoCurrencyCode: z.string().optional(),
+  unofficialCurrencyCode: z.string().optional(),
+})
+
 // Types
 export type RegisterInput = z.infer<typeof registerSchema>
 export type LoginInput = z.infer<typeof loginSchema>
@@ -59,3 +91,6 @@ export type BudgetCategoryInput = z.infer<typeof budgetCategorySchema>
 export type UpdateBudgetCategoryInput = z.infer<typeof updateBudgetCategorySchema>
 export type ExpenditureInput = z.infer<typeof expenditureSchema>
 export type UpdateExpenditureInput = z.infer<typeof updateExpenditureSchema>
+export type PlaidLinkInput = z.infer<typeof plaidLinkSchema>
+export type AccountInput = z.infer<typeof accountSchema>
+export type TransactionInput = z.infer<typeof transactionSchema>

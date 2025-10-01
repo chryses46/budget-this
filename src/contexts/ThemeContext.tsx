@@ -17,19 +17,21 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light')
   const [mounted, setMounted] = useState(false)
 
+  // Initialize theme from localStorage on mount
   useEffect(() => {
-    setMounted(true)
-    // Get saved theme from localStorage or default to system
     const savedTheme = localStorage.getItem('theme') as Theme
     if (savedTheme && ['light', 'dark', 'system'].includes(savedTheme)) {
       setTheme(savedTheme)
     } else {
-      // Set default theme to system if no saved theme
       setTheme('system')
     }
+    setMounted(true)
   }, [])
 
+  // Update resolved theme based on current theme
   useEffect(() => {
+    if (!mounted) return
+
     const updateResolvedTheme = () => {
       if (theme === 'system') {
         const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
@@ -41,26 +43,25 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     updateResolvedTheme()
 
+    // Listen for system theme changes when using system theme
     if (theme === 'system') {
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
       const handleChange = () => updateResolvedTheme()
       mediaQuery.addEventListener('change', handleChange)
       return () => mediaQuery.removeEventListener('change', handleChange)
     }
-  }, [theme])
+  }, [theme, mounted])
 
+  // Apply theme to document
   useEffect(() => {
     if (!mounted) return
-    
-    // Apply theme to document
+
     const root = document.documentElement
     root.classList.remove('light', 'dark')
     root.classList.add(resolvedTheme)
     
-    // Also set a data attribute for additional styling if needed
+    // Also set data attribute for Tailwind v4
     root.setAttribute('data-theme', resolvedTheme)
-    
-    console.log('Theme applied:', resolvedTheme) // Debug log
   }, [resolvedTheme, mounted])
 
   const handleSetTheme = (newTheme: Theme) => {
@@ -68,7 +69,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('theme', newTheme)
   }
 
-  // Prevent hydration mismatch
+  // Prevent hydration mismatch by not rendering until mounted
   if (!mounted) {
     return (
       <ThemeContext.Provider value={{ theme: 'system', setTheme: handleSetTheme, resolvedTheme: 'light' }}>

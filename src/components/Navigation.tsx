@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useUser } from '@/contexts/UserContext'
-import { ThemeDropdown } from '@/components/ThemeDropdown'
 import { Menu, X, DollarSign, Calendar, PieChart, CreditCard, LogOut } from 'lucide-react'
 
 interface NavigationProps {
@@ -11,7 +10,7 @@ interface NavigationProps {
 }
 
 export function Navigation({ currentPage }: NavigationProps) {
-  const { user } = useUser()
+  const { user, logout } = useUser()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   const navigationItems = [
@@ -21,9 +20,8 @@ export function Navigation({ currentPage }: NavigationProps) {
     { name: 'Accounts', href: '/accounts', icon: CreditCard },
   ]
 
-  const handleLogout = () => {
-    document.cookie = 'auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
-    window.location.href = '/login'
+  const handleLogout = async () => {
+    await logout()
   }
 
   return (
@@ -65,7 +63,10 @@ export function Navigation({ currentPage }: NavigationProps) {
             <div className="flex items-center space-x-4">
               {/* User Display */}
               {user && (
-                <div className="flex items-center space-x-2">
+                <Link
+                  href="/me"
+                  className="flex items-center space-x-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md px-2 py-1 transition-colors"
+                >
                   <div className="h-8 w-8 bg-indigo-100 dark:bg-indigo-900 rounded-full flex items-center justify-center">
                     <span className="text-sm font-medium text-indigo-700 dark:text-indigo-300">
                       {user.firstName.charAt(0).toUpperCase()}
@@ -74,13 +75,11 @@ export function Navigation({ currentPage }: NavigationProps) {
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                     {user.firstName}
                   </span>
-                </div>
+                </Link>
               )}
               
-              <ThemeDropdown />
-              
               <button
-                onClick={handleLogout}
+                onClick={async () => await handleLogout()}
                 className="flex items-center space-x-1 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
               >
                 <LogOut className="h-4 w-4" />
@@ -91,7 +90,6 @@ export function Navigation({ currentPage }: NavigationProps) {
 
           {/* Mobile Menu Button */}
           <div className="md:hidden flex items-center space-x-2">
-            <ThemeDropdown />
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -111,7 +109,11 @@ export function Navigation({ currentPage }: NavigationProps) {
             <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 border-t border-gray-200 dark:border-gray-700">
               {/* User Display for Mobile */}
               {user && (
-                <div className="flex items-center space-x-2 px-3 py-2 mb-4">
+                <Link
+                  href="/me"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="flex items-center space-x-2 px-3 py-2 mb-4 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                >
                   <div className="h-8 w-8 bg-indigo-100 dark:bg-indigo-900 rounded-full flex items-center justify-center">
                     <span className="text-sm font-medium text-indigo-700 dark:text-indigo-300">
                       {user.firstName.charAt(0).toUpperCase()}
@@ -120,7 +122,7 @@ export function Navigation({ currentPage }: NavigationProps) {
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                     Welcome, {user.firstName}
                   </span>
-                </div>
+                </Link>
               )}
 
               {/* Navigation Links */}
@@ -145,9 +147,9 @@ export function Navigation({ currentPage }: NavigationProps) {
 
               {/* Sign Out Button for Mobile */}
               <button
-                onClick={() => {
+                onClick={async () => {
                   setIsMenuOpen(false)
-                  handleLogout()
+                  await handleLogout()
                 }}
                 className="flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 w-full"
               >

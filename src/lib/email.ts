@@ -3,7 +3,7 @@ import nodemailer from 'nodemailer'
 // Create reusable transporter object using SMTP transport
 const createTransporter = () => {
   return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    host: process.env.SMTP_HOST,
     port: parseInt(process.env.SMTP_PORT || '587'),
     secure: false, // true for 465, false for other ports
     auth: {
@@ -18,7 +18,7 @@ export async function sendVerificationEmail(email: string, verificationCode: str
   const transporter = createTransporter()
   
   const mailOptions = {
-    from: `"Budget This" <${process.env.SMTP_USER}>`,
+    from: `"Budget This" <verify@budget-this.com>`,
     to: email,
     subject: 'Verify Your Email - Budget This',
     html: `
@@ -51,7 +51,7 @@ export async function sendMfaCode(email: string, mfaCode: string) {
   const transporter = createTransporter()
   
   const mailOptions = {
-    from: `"Budget This" <${process.env.SMTP_USER}>`,
+    from: `"Budget This" <verify@budget-this.com>`,
     to: email,
     subject: 'Your MFA Code - Budget This',
     html: `
@@ -84,7 +84,7 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string, fi
   const transporter = createTransporter()
   
   const mailOptions = {
-    from: `"Budget This" <${process.env.SMTP_USER}>`,
+    from: `"Budget This" <verify@budget-this.com>`,
     to: email,
     subject: 'Reset Your Password - Budget This',
     html: `

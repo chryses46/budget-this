@@ -13,6 +13,7 @@ interface UserContextType {
   user: User | null
   setUser: (user: User | null) => void
   isLoading: boolean
+  logout: () => Promise<void>
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined)
@@ -44,8 +45,24 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     checkAuth()
   }, [])
 
+  const logout = async () => {
+    try {
+      // Call logout API to clear server-side session
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include'
+      })
+    } catch (error) {
+      console.error('Error during logout:', error)
+    } finally {
+      // Clear user state and redirect
+      setUser(null)
+      window.location.href = '/login'
+    }
+  }
+
   return (
-    <UserContext.Provider value={{ user, setUser, isLoading }}>
+    <UserContext.Provider value={{ user, setUser, isLoading, logout }}>
       {children}
     </UserContext.Provider>
   )
