@@ -37,27 +37,41 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        // Verify password
-        const isValidPassword = await verifyPassword(credentials.password, user.password)
-        if (!isValidPassword) {
-          return null
-        }
-
         // Check if email is verified
         if (!user.emailVerified) {
           return null
         }
 
-        // For MFA users, we'll handle this differently
-        // If MFA is enabled, we'll check for a special bypass flag
-        if (user.mfaEnabled) {
-          // Check if this is an MFA bypass (when mfaVerified is provided)
-          if (!credentials.mfaVerified || credentials.mfaVerified !== 'true') {
-            // MFA is enabled but not properly verified, deny access
-            console.log('MFA enabled but not verified:', { mfaVerified: credentials.mfaVerified, mfaCode: credentials.mfaCode, userId: credentials.userId })
+        // For email-only login (no password), allow if MFA is verified
+        if (!credentials.password && credentials.mfaVerified === 'true') {
+          console.log('Email-only login with MFA verification for user:', user.id)
+          return {
+            id: user.id,
+            email: user.email,
+            name: `${user.firstName} ${user.lastName}`,
+            firstName: user.firstName,
+            lastName: user.lastName
+          }
+        }
+
+        // For password-based login, verify password
+        if (credentials.password) {
+          const isValidPassword = await verifyPassword(credentials.password, user.password)
+          if (!isValidPassword) {
             return null
           }
-          console.log('MFA bypass successful for user:', user.id)
+
+          // For MFA users, we'll handle this differently
+          // If MFA is enabled, we'll check for a special bypass flag
+          if (user.mfaEnabled) {
+            // Check if this is an MFA bypass (when mfaVerified is provided)
+            if (!credentials.mfaVerified || credentials.mfaVerified !== 'true') {
+              // MFA is enabled but not properly verified, deny access
+              console.log('MFA enabled but not verified:', { mfaVerified: credentials.mfaVerified, mfaCode: credentials.mfaCode, userId: credentials.userId })
+              return null
+            }
+            console.log('MFA bypass successful for user:', user.id)
+          }
         }
 
         return {
@@ -101,7 +115,21 @@ export const authOptions: NextAuthOptions = {
     signIn: '/login',
     error: '/login'
   },
-  secret: process.env.NEXTAUTH_SECRET
+  secret: process.env.NEXTAUTH_SECRET,
+  cookies: {
+    sessionToken: {
+      name: process.env.NODE_ENV === 'production' 
+        ? '__Secure-next-auth.session-token' 
+        : 'next-auth.session-token',
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production'
+      }
+    }
+  },
+  debug: process.env.NODE_ENV === 'development'
 }
 
 // Export utility functions for use in API routes

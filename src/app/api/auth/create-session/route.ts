@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { encode } from 'next-auth/jwt'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,25 +35,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create a NextAuth-compatible JWT token
-    const token = await encode({
-      token: {
-        userId: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        name: `${user.firstName} ${user.lastName}`,
-        sub: user.id,
-        iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60), // 7 days
-        jti: crypto.randomUUID()
-      },
-      secret: process.env.NEXTAUTH_SECRET!
-    })
-
-    // Set the session cookie
-    const response = NextResponse.json({
-      message: 'Session created successfully',
+    // Return success - the actual session creation will be handled by NextAuth
+    // in the frontend after this API call
+    return NextResponse.json({
+      message: 'User verified successfully',
       user: {
         id: user.id,
         email: user.email,
@@ -60,16 +46,6 @@ export async function POST(request: NextRequest) {
         lastName: user.lastName
       }
     })
-
-    response.cookies.set('next-auth.session-token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60, // 7 days
-      path: '/'
-    })
-
-    return response
   } catch (error) {
     console.error('Create session error:', error)
     return NextResponse.json(

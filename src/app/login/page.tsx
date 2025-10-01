@@ -119,12 +119,13 @@ function LoginForm() {
       console.log('Calling signIn with:', { 
         email: storedCredentials.email, 
         hasPassword: !!storedCredentials.password, 
-        mfaVerified: 'true' 
+        mfaVerified: 'true',
+        userId: userId
       })
       
       // For email-only login, we need to handle it differently
       if (!storedCredentials.password) {
-        // Email-only login - create session directly via API
+        // Email-only login - verify user first, then use NextAuth
         const sessionResponse = await fetch('/api/auth/create-session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -135,12 +136,28 @@ function LoginForm() {
         })
         
         if (!sessionResponse.ok) {
-          setError('Failed to create session')
+          setError('Failed to verify user')
           return
         }
         
-        // Redirect to dashboard
-        window.location.href = callbackUrl
+        // Use NextAuth signIn with MFA bypass for email-only login
+        const signInResult = await signIn('credentials', {
+          email: storedCredentials.email,
+          password: '', // Empty password for email-only login
+          mfaVerified: 'true',
+          userId: userId,
+          redirect: false,
+          callbackUrl: callbackUrl
+        })
+
+        if (signInResult?.error) {
+          setError('Failed to create session')
+          return
+        }
+
+        if (signInResult?.ok) {
+          window.location.href = callbackUrl
+        }
         return
       }
       
