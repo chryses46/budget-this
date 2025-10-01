@@ -30,7 +30,12 @@ export function middleware(request: NextRequest) {
   console.log('Middleware - Is protected route:', isProtectedRoute)
   
   // If accessing a protected route without auth, redirect to login
+  // Exception: Allow dashboard to load and let client-side handle auth
   if (isProtectedRoute && !hasAuth) {
+    if (pathname === '/dashboard') {
+      console.log('Middleware - Allowing dashboard access, client will handle auth')
+      return NextResponse.next()
+    }
     console.log('Middleware - Redirecting to login due to missing auth token')
     return NextResponse.redirect(new URL('/login', request.url))
   }

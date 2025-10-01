@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Calendar, TrendingUp, AlertCircle, Plus, CreditCard, PieChart } from 'lucide-react'
 import { Navigation } from '@/components/Navigation'
 import { useUser } from '@/contexts/UserContext'
+import { AuthClient } from '@/lib/auth-client'
 
 interface Bill {
   id: string
@@ -46,6 +47,16 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    // Check if user has token in localStorage (mobile compatibility)
+    const hasToken = AuthClient.getToken()
+    
+    if (!user && !userLoading && !hasToken) {
+      // No user and no token, redirect to login
+      console.log('Dashboard: No user and no token, redirecting to login')
+      window.location.href = '/login'
+      return
+    }
+    
     if (user && !userLoading) {
       fetchDashboardData()
     }
@@ -55,10 +66,10 @@ export default function DashboardPage() {
     try {
       setIsLoading(true)
       
-      // Fetch bills and budget categories in parallel
+      // Fetch bills and budget categories in parallel using AuthClient
       const [billsResponse, categoriesResponse] = await Promise.all([
-        fetch('/api/bills'),
-        fetch('/api/budget-categories')
+        AuthClient.makeAuthenticatedRequest('/api/bills'),
+        AuthClient.makeAuthenticatedRequest('/api/budget-categories')
       ])
 
       const bills: Bill[] = billsResponse.ok ? await billsResponse.json() : []
