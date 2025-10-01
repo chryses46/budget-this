@@ -1,35 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { updateBudgetCategorySchema } from '@/lib/validations'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/auth-session'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = await requireAuth(request)
-    if ('error' in authResult) {
-      return authResult.error
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
     }
-    const { userId } = authResult
+    const userId = session.user.id
 
     const { id } = await params
     const body = await request.json()
     const { title, limit } = updateBudgetCategorySchema.parse(body)
 
     const category = await prisma.budgetCategory.update({
-      where: { 
-        id,
-        userId // Ensure user owns this category
-      },
-      data: {
-        ...(title && { title }),
-        ...(limit && { limit })
-      },
-      include: {
-        expenditures: true
-      }
+      where: { id, userId },
+      data: { title, limit }
     })
 
     return NextResponse.json(category)
@@ -47,19 +42,19 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = await requireAuth(request)
-    if ('error' in authResult) {
-      return authResult.error
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
     }
-    const { userId } = authResult
+    const userId = session.user.id
 
     const { id } = await params
 
     await prisma.budgetCategory.delete({
-      where: { 
-        id,
-        userId // Ensure user owns this category
-      }
+      where: { id, userId }
     })
 
     return NextResponse.json({ message: 'Budget category deleted successfully' })

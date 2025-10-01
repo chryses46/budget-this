@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { signIn } from 'next-auth/react'
 import Link from 'next/link'
 import { loginSchema, emailLoginSchema, LoginInput, EmailLoginInput } from '@/lib/validations'
 import { cn } from '@/lib/utils'
@@ -12,49 +13,54 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [requiresMfa, setRequiresMfa] = useState(false)
   const [userId, setUserId] = useState('')
-  const [loginMode, setLoginMode] = useState<'password' | 'email'>('password')
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<LoginInput>({
+  const loginForm = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: '',
+      password: ''
+    }
   })
 
-  const {
-    register: registerEmail,
-    handleSubmit: handleEmailSubmit,
-    formState: { errors: emailErrors },
-  } = useForm<EmailLoginInput>({
+  const mfaForm = useForm<{ mfaCode: string }>({
+    resolver: zodResolver(emailLoginSchema.pick({ code: true }).transform(data => ({ mfaCode: data.code }))),
+    defaultValues: {
+      mfaCode: ''
+    }
+  })
+
+  const emailLoginForm = useForm<EmailLoginInput>({
     resolver: zodResolver(emailLoginSchema),
+    defaultValues: {
+      email: ''
+    }
   })
 
-  const onSubmit = async (data: LoginInput) => {
-    setIsLoading(true)
-    setError('')
-
+  const handleLogin = async (data: LoginInput) => {
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
+      setIsLoading(true)
+      setError('')
+
+      const result = await signIn('credentials', {
+        email: data.email,
+        password: data.password,
+        redirect: false
       })
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Login failed')
+      if (result?.error) {
+        setError('Invalid credentials')
+        return
       }
 
-      if (result.requiresMfa) {
-        setRequiresMfa(true)
-        setUserId(result.userId)
-      } else {
-        // JWT token is set by the server in HTTP-only cookie
-        // User data will be fetched by UserContext
+      if (result?.ok) {
+        // Check if MFA is required
+        if (result.requiresMfa) {
+          setRequiresMfa(true)
+          setUserId(result.userId || '')
+          return
+        }
+        
+        // Login successful, redirect to dashboard
         window.location.href = '/dashboard'
       }
     } catch (err) {
@@ -64,61 +70,27 @@ export default function LoginPage() {
     }
   }
 
-  const onEmailSubmit = async (data: EmailLoginInput) => {
-    setIsLoading(true)
-    setError('')
-
+  const handleMfaSubmit = async (data: { mfaCode: string }) => {
     try {
-      const response = await fetch('/api/auth/email-login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
+      setIsLoading(true)
+      setError('')
+
+      const result = await signIn('credentials', {
+        email: loginForm.getValues('email'),
+        password: loginForm.getValues('password'),
+        mfaCode: data.mfaCode,
+        userId: userId,
+        redirect: false
       })
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Email login failed')
+      if (result?.error) {
+        setError('Invalid MFA code')
+        return
       }
 
-      // Email login always requires MFA
-      setRequiresMfa(true)
-      setUserId(result.userId)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Email login failed')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleMfaSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError('')
-
-    const formData = new FormData(e.currentTarget)
-    const code = formData.get('code') as string
-
-    try {
-      const response = await fetch('/api/auth/verify-mfa', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ code, userId }),
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'MFA verification failed')
+      if (result?.ok) {
+        window.location.href = '/dashboard'
       }
-
-      // Session is set by the server in HTTP-only cookie
-      // User data will be fetched by UserContext
-      window.location.href = '/dashboard'
     } catch (err) {
       setError(err instanceof Error ? err.message : 'MFA verification failed')
     } finally {
@@ -126,230 +98,217 @@ export default function LoginPage() {
     }
   }
 
+  const handleEmailLogin = async (data: EmailLoginInput) => {
+    try {
+      setIsLoading(true)
+      setError('')
+
+      // Send MFA code to email
+      const response = await fetch('/api/auth/email-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to send MFA code')
+      }
+
+      setRequiresMfa(true)
+      setUserId(result.userId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send MFA code')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   if (requiresMfa) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-        <div className="sm:mx-auto sm:w-full sm:max-w-md">
-          <h2 className="mt-6 text-center text-3xl font-bold text-gray-900 dark:text-white">
-            Enter verification code
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-            We sent a 6-digit code to your email
-          </p>
-        </div>
-
-        <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-          <div className="bg-white dark:bg-gray-800 py-8 px-4 shadow sm:rounded-lg sm:px-10">
-            <form className="space-y-6" onSubmit={handleMfaSubmit}>
-              <div>
-                <label htmlFor="code" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Verification Code
-                </label>
-                <div className="mt-1">
-                  <input
-                    id="code"
-                    name="code"
-                    type="text"
-                    maxLength={6}
-                    className="appearance-none block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    placeholder="000000"
-                  />
-                </div>
-              </div>
-
-              {error && (
-                <div className="text-red-600 dark:text-red-400 text-sm text-center">{error}</div>
-              )}
-
-              <div>
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                >
-                  {isLoading ? 'Verifying...' : 'Verify Code'}
-                </button>
-              </div>
-            </form>
-
-            <div className="mt-6">
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300 dark:border-gray-600" />
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">Or</span>
-                </div>
-              </div>
-
-              <div className="mt-6">
-                <button
-                  onClick={() => setRequiresMfa(false)}
-                  className="w-full flex justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  Back to Login
-                </button>
-              </div>
-            </div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8">
+          <div>
+            <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
+              Enter MFA Code
+            </h2>
+            <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
+              We sent a code to your email
+            </p>
           </div>
+          <form className="mt-8 space-y-6" onSubmit={mfaForm.handleSubmit(handleMfaSubmit)}>
+            <div>
+              <label htmlFor="mfaCode" className="sr-only">
+                MFA Code
+              </label>
+              <input
+                {...mfaForm.register('mfaCode')}
+                type="text"
+                required
+                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="Enter 6-digit code"
+              />
+              {mfaForm.formState.errors.mfaCode && (
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                  {mfaForm.formState.errors.mfaCode.message}
+                </p>
+              )}
+            </div>
+
+            {error && (
+              <div className="text-red-600 dark:text-red-400 text-sm text-center">
+                {error}
+              </div>
+            )}
+
+            <div>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? 'Verifying...' : 'Verify Code'}
+              </button>
+            </div>
+
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setRequiresMfa(false)
+                  setError('')
+                }}
+                className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 text-sm"
+              >
+                Back to login
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="mt-6 text-center text-3xl font-bold text-gray-900 dark:text-white">
-          Sign in to your account
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-          Or{' '}
-          <Link href="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
-            create a new account
-          </Link>
-        </p>
-      </div>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <div>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
+            Sign in to your account
+          </h2>
+          <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
+            Or{' '}
+            <Link href="/register" className="font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300">
+              create a new account
+            </Link>
+          </p>
+        </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white dark:bg-gray-800 py-8 px-4 shadow sm:rounded-lg sm:px-10">
-          {/* Login Mode Toggle */}
-          <div className="flex mb-6">
-            <button
-              type="button"
-              onClick={() => setLoginMode('password')}
-              className={cn(
-                'flex-1 py-2 px-4 text-sm font-medium rounded-l-md border',
-                loginMode === 'password'
-                  ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+        <div className="space-y-4">
+          {/* Regular Login Form */}
+          <form className="space-y-4" onSubmit={loginForm.handleSubmit(handleLogin)}>
+            <div>
+              <label htmlFor="email" className="sr-only">
+                Email address
+              </label>
+              <input
+                {...loginForm.register('email')}
+                type="email"
+                autoComplete="email"
+                required
+                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="Email address"
+              />
+              {loginForm.formState.errors.email && (
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                  {loginForm.formState.errors.email.message}
+                </p>
               )}
-            >
-              Password
-            </button>
-            <button
-              type="button"
-              onClick={() => setLoginMode('email')}
-              className={cn(
-                'flex-1 py-2 px-4 text-sm font-medium rounded-r-md border-t border-r border-b',
-                loginMode === 'email'
-                  ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+            </div>
+
+            <div>
+              <label htmlFor="password" className="sr-only">
+                Password
+              </label>
+              <input
+                {...loginForm.register('password')}
+                type="password"
+                autoComplete="current-password"
+                required
+                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="Password"
+              />
+              {loginForm.formState.errors.password && (
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                  {loginForm.formState.errors.password.message}
+                </p>
               )}
-            >
-              Email Code
-            </button>
+            </div>
+
+            <div>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? 'Signing in...' : 'Sign in'}
+              </button>
+            </div>
+          </form>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300 dark:border-gray-600" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400">Or</span>
+            </div>
           </div>
 
-          {/* Password Login Form */}
-          {loginMode === 'password' && (
-            <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Email address
-                </label>
-                <div className="mt-1">
-                  <input
-                    {...register('email')}
-                    type="email"
-                    autoComplete="email"
-                    className={cn(
-                      'appearance-none block w-full px-3 py-2 border rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
-                      errors.email ? 'border-red-300 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
-                    )}
-                  />
-                  {errors.email && (
-                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.email.message}</p>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Password
-                </label>
-                <div className="mt-1">
-                  <input
-                    {...register('password')}
-                    type="password"
-                    autoComplete="current-password"
-                    className={cn(
-                      'appearance-none block w-full px-3 py-2 border rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
-                      errors.password ? 'border-red-300 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
-                    )}
-                  />
-                  {errors.password && (
-                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.password.message}</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="text-sm">
-                  <Link href="/forgot-password" className="font-medium text-indigo-600 hover:text-indigo-500">
-                    Forgot your password?
-                  </Link>
-                </div>
-              </div>
-
-              {error && (
-                <div className="text-red-600 dark:text-red-400 text-sm text-center">{error}</div>
-              )}
-
-              <div>
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                >
-                  {isLoading ? 'Signing in...' : 'Sign in'}
-                </button>
-              </div>
-            </form>
-          )}
-
           {/* Email Login Form */}
-          {loginMode === 'email' && (
-            <form className="space-y-6" onSubmit={handleEmailSubmit(onEmailSubmit)}>
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Email address
-                </label>
-                <div className="mt-1">
-                  <input
-                    {...registerEmail('email')}
-                    type="email"
-                    autoComplete="email"
-                    className={cn(
-                      'appearance-none block w-full px-3 py-2 border rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
-                      emailErrors.email ? 'border-red-300 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
-                    )}
-                    placeholder="Enter your email address"
-                  />
-                  {emailErrors.email && (
-                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{emailErrors.email.message}</p>
-                  )}
-                </div>
-                <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                  We&apos;ll send a verification code to your email address.
+          <form className="space-y-4" onSubmit={emailLoginForm.handleSubmit(handleEmailLogin)}>
+            <div>
+              <label htmlFor="email" className="sr-only">
+                Email address
+              </label>
+              <input
+                {...emailLoginForm.register('email')}
+                type="email"
+                autoComplete="email"
+                required
+                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="Email address"
+              />
+              {emailLoginForm.formState.errors.email && (
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                  {emailLoginForm.formState.errors.email.message}
                 </p>
-              </div>
-
-              {error && (
-                <div className="text-red-600 dark:text-red-400 text-sm text-center">{error}</div>
               )}
+            </div>
 
-              <div>
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                >
-                  {isLoading ? 'Sending code...' : 'Send verification code'}
-                </button>
-              </div>
-            </form>
-          )}
+            <div>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="group relative w-full flex justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? 'Sending...' : 'Login with code'}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {error && (
+          <div className="text-red-600 dark:text-red-400 text-sm text-center">
+            {error}
+          </div>
+        )}
+
+        <div className="text-center">
+          <Link href="/forgot-password" className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 text-sm">
+            Forgot your password?
+          </Link>
         </div>
       </div>
     </div>

@@ -41,12 +41,7 @@ export async function POST(request: NextRequest) {
     // Send reset email
     const resetUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:8080'}/reset-password?token=${resetToken}`
     
-    const emailResult = await sendPasswordResetEmail(email, resetUrl, user.firstName)
-    
-    if (!emailResult.success) {
-      console.error('Failed to send password reset email:', emailResult.error)
-      // Still return success to user for security
-    }
+    await sendPasswordResetEmail(email, resetUrl)
 
     return NextResponse.json({
       message: 'If an account with that email exists, we sent a password reset link.'

@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/auth-session'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await requireAuth(request)
-    if ('error' in authResult) {
-      return authResult.error
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
     }
-    const { userId } = authResult
+    const userId = session.user.id
 
     const { searchParams } = new URL(request.url)
     const accountId = searchParams.get('accountId')
@@ -17,55 +21,44 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
 
-    const whereClause: {
-      userId: string
-      accountId?: string
-      date?: {
-        gte: Date
-        lte: Date
-      }
-    } = { userId }
+    const whereClause: any = { userId }
     
     if (accountId) {
       whereClause.accountId = accountId
     }
-    
     if (startDate && endDate) {
       whereClause.date = {
         gte: new Date(startDate),
+        lte: new Date(endDate)
+      }
+    } else if (startDate) {
+      whereClause.date = {
+        gte: new Date(startDate)
+      }
+    } else if (endDate) {
+      whereClause.date = {
         lte: new Date(endDate)
       }
     }
 
     const transactions = await prisma.transaction.findMany({
       where: whereClause,
+      take: limit,
+      skip: offset,
+      orderBy: { date: 'desc' },
       include: {
         account: {
-          select: {
-            id: true,
-            name: true,
-            type: true,
-            institution: true
-          }
+          select: { name: true, institution: true }
         }
-      },
-      orderBy: { date: 'desc' },
-      take: limit,
-      skip: offset
+      }
     })
 
-    const totalCount = await prisma.transaction.count({
-      where: whereClause
-    })
+    const totalCount = await prisma.transaction.count({ where: whereClause })
 
     return NextResponse.json({
       transactions,
-      pagination: {
-        total: totalCount,
-        limit,
-        offset,
-        hasMore: offset + limit < totalCount
-      }
+      totalCount,
+      hasMore: offset + limit < totalCount,
     })
   } catch (error) {
     console.error('Error fetching transactions:', error)
@@ -78,65 +71,17 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await requireAuth(request)
-    if ('error' in authResult) {
-      return authResult.error
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
     }
-    const { userId } = authResult
+    const userId = session.user.id
 
     const body = await request.json()
-    const {
-      plaidTransactionId,
-      accountId,
-      amount,
-      type,
-      status,
-      date,
-      name,
-      merchantName,
-      category,
-      subcategory,
-      location,
-      paymentChannel,
-      pending,
-      isoCurrencyCode,
-      unofficialCurrencyCode
-    } = body
-
-    // Validate required fields
-    if (!plaidTransactionId || !accountId || !amount || !type || !status || !date || !name) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
-    }
-
-    // Verify the account belongs to the user
-    const account = await prisma.account.findFirst({
-      where: { 
-        id: accountId,
-        userId 
-      }
-    })
-
-    if (!account) {
-      return NextResponse.json(
-        { error: 'Account not found' },
-        { status: 404 }
-      )
-    }
-
-    // Check if transaction already exists
-    const existingTransaction = await prisma.transaction.findUnique({
-      where: { plaidTransactionId }
-    })
-
-    if (existingTransaction) {
-      return NextResponse.json(
-        { error: 'Transaction already exists' },
-        { status: 409 }
-      )
-    }
+    const { plaidTransactionId, accountId, amount, type, status, date, name, merchantName, category, subcategory, location, paymentChannel, pending, isoCurrencyCode, unofficialCurrencyCode } = body
 
     const transaction = await prisma.transaction.create({
       data: {
@@ -156,16 +101,6 @@ export async function POST(request: NextRequest) {
         pending: pending || false,
         isoCurrencyCode,
         unofficialCurrencyCode
-      },
-      include: {
-        account: {
-          select: {
-            id: true,
-            name: true,
-            type: true,
-            institution: true
-          }
-        }
       }
     })
 

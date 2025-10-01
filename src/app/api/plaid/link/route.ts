@@ -1,41 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth-session'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await requireAuth(request)
-    if ('error' in authResult) {
-      return authResult.error
-    }
-    const { userId } = authResult
-
-    const body = await request.json()
-    const { publicToken } = body
-
-    if (!publicToken) {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
       return NextResponse.json(
-        { error: 'Public token is required' },
-        { status: 400 }
+        { error: 'Authentication required' },
+        { status: 401 }
       )
     }
 
-    // TODO: Implement Plaid Link token exchange
-    // This would typically:
-    // 1. Exchange public token for access token using Plaid API
-    // 2. Fetch account information from Plaid
-    // 3. Store account data in database
-    // 4. Return success response
-
-    // For now, return a placeholder response
+    // TODO: Implement Plaid Link token creation
     return NextResponse.json({
-      message: 'Plaid Link integration not yet implemented',
-      publicToken,
-      userId
+      message: 'Plaid integration coming soon'
     })
   } catch (error) {
-    console.error('Error processing Plaid Link:', error)
+    console.error('Error creating Plaid link token:', error)
     return NextResponse.json(
-      { error: 'Failed to process Plaid Link' },
+      { error: 'Failed to create Plaid link token' },
       { status: 500 }
     )
   }

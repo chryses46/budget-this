@@ -1,20 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { budgetCategorySchema } from '@/lib/validations'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/auth-session'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await requireAuth(request)
-    if ('error' in authResult) {
-      return authResult.error
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
     }
-    const { userId } = authResult
+    const userId = session.user.id
     
     const categories = await prisma.budgetCategory.findMany({
       where: { userId },
       include: {
-        expenditures: true
+        expenditures: {
+          orderBy: { createdAt: 'desc' }
+        }
       },
       orderBy: { createdAt: 'desc' }
     })
@@ -31,11 +37,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await requireAuth(request)
-    if ('error' in authResult) {
-      return authResult.error
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
     }
-    const { userId } = authResult
+    const userId = session.user.id
 
     const body = await request.json()
     const { title, limit } = budgetCategorySchema.parse(body)
@@ -45,9 +54,6 @@ export async function POST(request: NextRequest) {
         title,
         limit,
         userId
-      },
-      include: {
-        expenditures: true
       }
     })
 

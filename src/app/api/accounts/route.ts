@@ -1,24 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/auth-session'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await requireAuth(request)
-    if ('error' in authResult) {
-      return authResult.error
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
     }
-    const { userId } = authResult
+    const userId = session.user.id
 
     const accounts = await prisma.account.findMany({
       where: { userId },
       include: {
         transactions: {
           orderBy: { date: 'desc' },
-          take: 10 // Get latest 10 transactions per account
-        }
+          take: 5, // Fetch latest 5 transactions for each account
+        },
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     })
 
     return NextResponse.json(accounts)
@@ -33,41 +37,17 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await requireAuth(request)
-    if ('error' in authResult) {
-      return authResult.error
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
     }
-    const { userId } = authResult
+    const userId = session.user.id
 
     const body = await request.json()
-    const { 
-      plaidAccountId, 
-      name, 
-      type, 
-      subtype, 
-      institution, 
-      institutionId 
-    } = body
-
-    // Validate required fields
-    if (!plaidAccountId || !name || !type || !institution || !institutionId) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
-    }
-
-    // Check if account already exists
-    const existingAccount = await prisma.account.findUnique({
-      where: { plaidAccountId }
-    })
-
-    if (existingAccount) {
-      return NextResponse.json(
-        { error: 'Account already exists' },
-        { status: 409 }
-      )
-    }
+    const { plaidAccountId, name, type, subtype, institution, institutionId } = body
 
     const account = await prisma.account.create({
       data: {
@@ -78,9 +58,6 @@ export async function POST(request: NextRequest) {
         institution,
         institutionId,
         userId
-      },
-      include: {
-        transactions: true
       }
     })
 

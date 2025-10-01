@@ -1,34 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { updateBillSchema } from '@/lib/validations'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/auth-session'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = await requireAuth(request)
-    if ('error' in authResult) {
-      return authResult.error
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
     }
-    const { userId } = authResult
+    const userId = session.user.id
 
     const { id } = await params
     const body = await request.json()
     const { title, amount, dayDue, frequency } = updateBillSchema.parse(body)
 
     const bill = await prisma.bill.update({
-      where: { 
-        id,
-        userId // Ensure user owns this bill
-      },
-      data: {
-        ...(title && { title }),
-        ...(amount && { amount }),
-        ...(dayDue && { dayDue }),
-        ...(frequency && { frequency })
-      }
+      where: { id, userId },
+      data: { title, amount, dayDue, frequency }
     })
 
     return NextResponse.json(bill)
@@ -46,19 +42,19 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = await requireAuth(request)
-    if ('error' in authResult) {
-      return authResult.error
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
     }
-    const { userId } = authResult
+    const userId = session.user.id
 
     const { id } = await params
 
     await prisma.bill.delete({
-      where: { 
-        id,
-        userId // Ensure user owns this bill
-      }
+      where: { id, userId }
     })
 
     return NextResponse.json({ message: 'Bill deleted successfully' })

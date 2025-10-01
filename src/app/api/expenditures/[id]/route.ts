@@ -1,53 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { updateExpenditureSchema } from '@/lib/validations'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/auth-session'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = await requireAuth(request)
-    if ('error' in authResult) {
-      return authResult.error
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
     }
-    const { userId } = authResult
+    const userId = session.user.id
 
     const { id } = await params
     const body = await request.json()
     const { title, amount, categoryId } = updateExpenditureSchema.parse(body)
 
-    // If categoryId is being updated, verify the new category belongs to the user
-    if (categoryId) {
-      const category = await prisma.budgetCategory.findFirst({
-        where: { 
-          id: categoryId,
-          userId 
-        }
-      })
-
-      if (!category) {
-        return NextResponse.json(
-          { error: 'Category not found' },
-          { status: 404 }
-        )
-      }
-    }
-
     const expenditure = await prisma.expenditure.update({
-      where: { 
-        id,
-        userId // Ensure user owns this expenditure
-      },
-      data: {
-        ...(title && { title }),
-        ...(amount && { amount }),
-        ...(categoryId && { categoryId })
-      },
-      include: {
-        category: true
-      }
+      where: { id, userId },
+      data: { title, amount, categoryId }
     })
 
     return NextResponse.json(expenditure)
@@ -65,19 +42,19 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = await requireAuth(request)
-    if ('error' in authResult) {
-      return authResult.error
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
     }
-    const { userId } = authResult
+    const userId = session.user.id
 
     const { id } = await params
 
     await prisma.expenditure.delete({
-      where: { 
-        id,
-        userId // Ensure user owns this expenditure
-      }
+      where: { id, userId }
     })
 
     return NextResponse.json({ message: 'Expenditure deleted successfully' })

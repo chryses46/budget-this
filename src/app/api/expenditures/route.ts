@@ -1,20 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { expenditureSchema } from '@/lib/validations'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/auth-session'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await requireAuth(request)
-    if ('error' in authResult) {
-      return authResult.error
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
     }
-    const { userId } = authResult
+    const userId = session.user.id
     
     const expenditures = await prisma.expenditure.findMany({
       where: { userId },
       include: {
-        category: true
+        category: {
+          select: { title: true }
+        }
       },
       orderBy: { createdAt: 'desc' }
     })
@@ -31,29 +37,17 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await requireAuth(request)
-    if ('error' in authResult) {
-      return authResult.error
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
     }
-    const { userId } = authResult
+    const userId = session.user.id
 
     const body = await request.json()
     const { title, amount, categoryId } = expenditureSchema.parse(body)
-
-    // Verify the category belongs to the user
-    const category = await prisma.budgetCategory.findFirst({
-      where: { 
-        id: categoryId,
-        userId 
-      }
-    })
-
-    if (!category) {
-      return NextResponse.json(
-        { error: 'Category not found' },
-        { status: 404 }
-      )
-    }
 
     const expenditure = await prisma.expenditure.create({
       data: {
@@ -61,9 +55,6 @@ export async function POST(request: NextRequest) {
         amount,
         categoryId,
         userId
-      },
-      include: {
-        category: true
       }
     })
 
