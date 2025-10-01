@@ -1,25 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Navigation } from '@/components/Navigation'
 import { useUser } from '@/contexts/UserContext'
 // import { useTheme } from '@/contexts/ThemeContext' // Commented out since theme selection is disabled
 import { User, Mail, Key, CreditCard, Save, Eye, EyeOff } from 'lucide-react'
 
-interface BankAccount {
-  id: string
-  name: string
-  type: 'checking' | 'savings' | 'credit'
-  balance: number
-  institution: string
-  accountNumber: string
-}
 
 export default function MePage() {
   const { user, isLoading: userLoading } = useUser()
   // const { theme, setTheme } = useTheme() // Commented out since theme selection is disabled
-  const [accounts, setAccounts] = useState<BankAccount[]>([])
-  const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [showPasswordForm, setShowPasswordForm] = useState(false)
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
@@ -32,45 +22,6 @@ export default function MePage() {
   })
   const [passwordError, setPasswordError] = useState('')
   const [passwordSuccess, setPasswordSuccess] = useState('')
-
-  useEffect(() => {
-    if (user && !userLoading) {
-      fetchAccounts()
-    }
-  }, [user, userLoading])
-
-  const fetchAccounts = async () => {
-    try {
-      // TODO: Replace with actual API call to fetch connected accounts
-      // const response = await fetch('/api/accounts')
-      // const data = await response.json()
-      // setAccounts(data)
-      
-      // Placeholder data
-      setAccounts([
-        {
-          id: '1',
-          name: 'Chase Checking',
-          type: 'checking',
-          balance: 2500.00,
-          institution: 'Chase Bank',
-          accountNumber: '****1234'
-        },
-        {
-          id: '2',
-          name: 'Chase Savings',
-          type: 'savings',
-          balance: 10000.00,
-          institution: 'Chase Bank',
-          accountNumber: '****5678'
-        }
-      ])
-    } catch (error) {
-      console.error('Error fetching accounts:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -120,33 +71,7 @@ export default function MePage() {
     }
   }
 
-  const getAccountIcon = (type: string) => {
-    switch (type) {
-      case 'checking':
-        return <CreditCard className="h-5 w-5 text-blue-600" />
-      case 'savings':
-        return <CreditCard className="h-5 w-5 text-green-600" />
-      case 'credit':
-        return <CreditCard className="h-5 w-5 text-red-600" />
-      default:
-        return <CreditCard className="h-5 w-5 text-gray-600" />
-    }
-  }
-
-  const getAccountTypeColor = (type: string) => {
-    switch (type) {
-      case 'checking':
-        return 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200'
-      case 'savings':
-        return 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-      case 'credit':
-        return 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
-      default:
-        return 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
-    }
-  }
-
-  if (userLoading || isLoading) {
+  if (userLoading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">

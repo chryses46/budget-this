@@ -16,6 +16,17 @@ enum Frequency {
   Yearly
 }
 
+enum TransactionType {
+  DEBIT
+  CREDIT
+}
+
+enum TransactionStatus {
+  PENDING
+  POSTED
+  CANCELLED
+}
+
 model User {
   id        String   @id @default(uuid())
   firstName String
@@ -31,6 +42,8 @@ model User {
   budgetCategories BudgetCategory[]
   expenditures   Expenditure[]
   passwordResets PasswordReset[]
+  accounts       Account[]
+  transactions   Transaction[]
 
   @@map("users")
 }
@@ -87,4 +100,48 @@ model PasswordReset {
   createdAt DateTime @default(now())
 
   @@map("password_resets")
+}
+
+model Account {
+  id            String   @id @default(uuid())
+  plaidAccountId String  @unique
+  name          String
+  type          String   // checking, savings, credit, etc.
+  subtype       String?  // checking, savings, credit_card, etc.
+  institution   String
+  institutionId String
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  transactions  Transaction[]
+
+  @@map("accounts")
+}
+
+model Transaction {
+  id                String           @id @default(uuid())
+  plaidTransactionId String          @unique
+  accountId         String
+  account           Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount            Float
+  type              TransactionType
+  status            TransactionStatus
+  date              DateTime
+  name              String
+  merchantName      String?
+  category          String?
+  subcategory       String?
+  location          Json?            // Store location data as JSON
+  paymentChannel    String?
+  pending           Boolean          @default(false)
+  isoCurrencyCode   String?
+  unofficialCurrencyCode String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@map("transactions")
 }
