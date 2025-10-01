@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { budgetCategorySchema } from '@/lib/validations'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/auth-helpers'
+import { requireAuth } from '@/lib/auth-session'
 
 export async function GET(request: NextRequest) {
   try {

@@ -1,7 +1,6 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { AuthClient } from '@/lib/auth-client'
 
 interface User {
   id: string
@@ -24,25 +23,20 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // Check if user is authenticated by looking for auth token
+    // Check if user is authenticated by looking for session
     const checkAuth = async () => {
       try {
-        // Use AuthClient for mobile compatibility
-        const response = await AuthClient.makeAuthenticatedRequest('/api/auth/me')
+        const response = await fetch('/api/auth/me')
         if (response.ok) {
           const userData = await response.json()
           setUser(userData)
         } else {
-          // Token is invalid or user not authenticated
+          // Session is invalid or user not authenticated
           setUser(null)
-          // Clear localStorage token if API call fails
-          AuthClient.removeToken()
         }
       } catch (error) {
         console.error('Error fetching user:', error)
         setUser(null)
-        // Clear localStorage token on error
-        AuthClient.removeToken()
       } finally {
         setIsLoading(false)
       }
@@ -54,15 +48,14 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const logout = async () => {
     try {
       // Call logout API to clear server-side session
-      await AuthClient.makeAuthenticatedRequest('/api/auth/logout', {
+      await fetch('/api/auth/logout', {
         method: 'POST'
       })
     } catch (error) {
       console.error('Error during logout:', error)
     } finally {
-      // Clear user state and localStorage token
+      // Clear user state and redirect
       setUser(null)
-      AuthClient.removeToken()
       window.location.href = '/login'
     }
   }

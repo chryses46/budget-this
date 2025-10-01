@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { mfaSchema } from '@/lib/validations'
 import { prisma } from '@/lib/prisma'
-import { generateToken } from '@/lib/jwt'
+import { createSession, setSessionCookie } from '@/lib/session'
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,52 +29,26 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create JWT token
-    const token = generateToken({
+    // Create session
+    const session = await createSession({
       userId: user.id,
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName
     })
 
-    // Set JWT token in HTTP-only cookie
-    const response = NextResponse.json({
+    // Set session cookie
+    await setSessionCookie(session)
+
+    return NextResponse.json({
       message: 'MFA verification successful',
       user: {
         id: user.id,
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email
-      },
-      token: token // Include token in response for mobile localStorage fallback
+      }
     })
-
-    // Try multiple cookie configurations for mobile compatibility
-    response.cookies.set('auth-token', token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 7 * 24 * 60 * 60 // 7 days
-    })
-
-    // Also set a non-httpOnly cookie as fallback for mobile
-    response.cookies.set('auth-token-fallback', token, {
-      httpOnly: false,
-      secure: true,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 7 * 24 * 60 * 60 // 7 days
-    })
-
-    // Debug logging
-    console.log('MFA verification successful, setting cookies for user:', user.id)
-    console.log('User agent:', request.headers.get('user-agent'))
-    console.log('Cookie set with sameSite: lax, secure: true, path: /')
-    console.log('Also set fallback cookie for mobile compatibility')
-    console.log('Token included in response for localStorage fallback')
-
-    return response
   } catch (error) {
     console.error('MFA verification error:', error)
     return NextResponse.json(

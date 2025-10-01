@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyPassword, hashPassword } from '@/lib/auth'
-import { requireAuth } from '@/lib/auth-helpers'
+import { requireAuth } from '@/lib/auth-session'
 
 export async function POST(request: NextRequest) {
   try {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { mfaSchema } from '@/lib/validations'
 import { prisma } from '@/lib/prisma'
-import { generateToken } from '@/lib/jwt'
+import { createSession, setSessionCookie } from '@/lib/session'
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,23 +16,33 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // TODO: Verify the code against stored verification code
+    // TODO: Verify the email verification code against stored code
     // For now, we'll just mark the email as verified
     const user = await prisma.user.update({
       where: { id: userId },
       data: { emailVerified: true }
     })
 
-    // Create JWT token
-    const token = generateToken({
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      )
+    }
+
+    // Create session
+    const session = await createSession({
       userId: user.id,
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName
     })
 
-    const response = NextResponse.json({
-      message: 'Email verified successfully',
+    // Set session cookie
+    await setSessionCookie(session)
+
+    return NextResponse.json({
+      message: 'Email verification successful',
       user: {
         id: user.id,
         firstName: user.firstName,
@@ -40,16 +50,6 @@ export async function POST(request: NextRequest) {
         email: user.email
       }
     })
-
-    // Set JWT token in HTTP-only cookie
-    response.cookies.set('auth-token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 // 7 days
-    })
-
-    return response
   } catch (error) {
     console.error('Email verification error:', error)
     return NextResponse.json(

@@ -1,52 +1,34 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { getSession } from '@/lib/session'
 
 // Define protected routes that require authentication
-const protectedRoutes = ['/dashboard', '/bills', '/budget', '/accounts']
+const protectedRoutes = ['/dashboard', '/bills', '/budget', '/accounts', '/me']
 
 // Define public routes that don't require authentication
 const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password']
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   
   // Check if the current route is protected
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
   const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route))
   
-  // Debug logging for mobile issues
-  const authToken = request.cookies.get('auth-token')?.value
-  const fallbackToken = request.cookies.get('auth-token-fallback')?.value
-  const authHeader = request.headers.get('authorization')?.replace('Bearer ', '')
-  const hasAuth = !!authToken || !!fallbackToken || !!authHeader
-  
-  console.log('Middleware - Path:', pathname)
-  console.log('Middleware - Auth token present:', !!authToken)
-  console.log('Middleware - Fallback token present:', !!fallbackToken)
-  console.log('Middleware - Auth header present:', !!authHeader)
-  console.log('Middleware - Has auth:', hasAuth)
-  console.log('Middleware - User agent:', request.headers.get('user-agent'))
-  console.log('Middleware - All cookies:', request.cookies.getAll().map(c => c.name))
-  console.log('Middleware - Is protected route:', isProtectedRoute)
+  // Check for valid session
+  const session = await getSession()
+  const hasAuth = !!session
   
   // If accessing a protected route without auth, redirect to login
-  // Exception: Allow dashboard to load and let client-side handle auth
   if (isProtectedRoute && !hasAuth) {
-    if (pathname === '/dashboard') {
-      console.log('Middleware - Allowing dashboard access, client will handle auth')
-      return NextResponse.next()
-    }
-    console.log('Middleware - Redirecting to login due to missing auth token')
     return NextResponse.redirect(new URL('/login', request.url))
   }
   
   // If accessing login/register with auth, redirect to dashboard
   if (isPublicRoute && hasAuth) {
-    console.log('Middleware - Redirecting to dashboard due to existing auth token')
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
   
-  console.log('Middleware - Allowing request to proceed')
   return NextResponse.next()
 }
 

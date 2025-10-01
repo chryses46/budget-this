@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { loginSchema } from '@/lib/validations'
 import { prisma } from '@/lib/prisma'
 import { verifyPassword, generateMfaCode, sendMfaCode } from '@/lib/auth'
-import { generateToken } from '@/lib/jwt'
+import { createSession, setSessionCookie } from '@/lib/session'
 
 export async function POST(request: NextRequest) {
   try {
@@ -52,15 +52,18 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Create JWT token
-    const token = generateToken({
+    // Create session
+    const session = await createSession({
       userId: user.id,
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName
     })
 
-    const response = NextResponse.json({
+    // Set session cookie
+    await setSessionCookie(session)
+
+    return NextResponse.json({
       message: 'Login successful',
       user: {
         id: user.id,
@@ -69,26 +72,6 @@ export async function POST(request: NextRequest) {
         email: user.email
       }
     })
-
-    // Set JWT token in HTTP-only cookie
-    response.cookies.set('auth-token', token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 7 * 24 * 60 * 60 // 7 days
-    })
-
-    // Also set a non-httpOnly cookie as fallback for mobile
-    response.cookies.set('auth-token-fallback', token, {
-      httpOnly: false,
-      secure: true,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 7 * 24 * 60 * 60 // 7 days
-    })
-
-    return response
   } catch (error) {
     console.error('Login error:', error)
     return NextResponse.json(

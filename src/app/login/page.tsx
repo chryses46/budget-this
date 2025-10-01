@@ -6,7 +6,6 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
 import { loginSchema, emailLoginSchema, LoginInput, EmailLoginInput } from '@/lib/validations'
 import { cn } from '@/lib/utils'
-import { AuthClient } from '@/lib/auth-client'
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
@@ -117,13 +116,7 @@ export default function LoginPage() {
         throw new Error(result.error || 'MFA verification failed')
       }
 
-      // Store token in localStorage for mobile compatibility
-      if (result.token) {
-        AuthClient.setToken(result.token)
-        console.log('Token stored in localStorage for mobile compatibility')
-      }
-
-      // JWT token is also set by the server in HTTP-only cookie
+      // Session is set by the server in HTTP-only cookie
       // User data will be fetched by UserContext
       window.location.href = '/dashboard'
     } catch (err) {
