@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
       lastName: user.lastName
     })
 
+    // Set JWT token in HTTP-only cookie
     const response = NextResponse.json({
       message: 'MFA verification successful',
       user: {
@@ -47,11 +48,10 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // Set JWT token in HTTP-only cookie
     response.cookies.set('auth-token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: true, // Always secure for mobile compatibility
+      sameSite: 'none', // More permissive for mobile browsers
       path: '/',
       maxAge: 7 * 24 * 60 * 60 // 7 days
     })
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     // Debug logging
     console.log('MFA verification successful, setting cookie for user:', user.id)
     console.log('User agent:', request.headers.get('user-agent'))
-    console.log('Cookie set with sameSite: lax, path: /')
+    console.log('Cookie set with sameSite: none, secure: true, path: /')
 
     return response
   } catch (error) {

@@ -14,20 +14,27 @@ export function middleware(request: NextRequest) {
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
   const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route))
   
-  // For now, we'll implement a simple check
-  // In a real app, you'd check for a valid session token here
-  const hasAuth = request.cookies.get('auth-token')?.value
+  // Debug logging for mobile issues
+  const authToken = request.cookies.get('auth-token')?.value
+  console.log('Middleware - Path:', pathname)
+  console.log('Middleware - Auth token present:', !!authToken)
+  console.log('Middleware - User agent:', request.headers.get('user-agent'))
+  console.log('Middleware - All cookies:', request.cookies.getAll().map(c => c.name))
+  console.log('Middleware - Is protected route:', isProtectedRoute)
   
   // If accessing a protected route without auth, redirect to login
-  if (isProtectedRoute && !hasAuth) {
+  if (isProtectedRoute && !authToken) {
+    console.log('Middleware - Redirecting to login due to missing auth token')
     return NextResponse.redirect(new URL('/login', request.url))
   }
   
   // If accessing login/register with auth, redirect to dashboard
-  if (isPublicRoute && hasAuth) {
+  if (isPublicRoute && authToken) {
+    console.log('Middleware - Redirecting to dashboard due to existing auth token')
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
   
+  console.log('Middleware - Allowing request to proceed')
   return NextResponse.next()
 }
 
