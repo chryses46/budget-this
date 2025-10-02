@@ -13,6 +13,7 @@ export default withAuth(
 
 export const config = {
   matcher: [
+    // Temporarily disable middleware to test
     '/dashboard/:path*',
     '/bills/:path*',
     '/budget/:path*',

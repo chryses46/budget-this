@@ -47,16 +47,23 @@ function LoginForm() {
       setIsLoading(true)
       setError('')
 
-      // First, check if user exists and has MFA enabled
-      const userResponse = await fetch('/api/auth/check-mfa', {
+      // First, validate credentials by calling a custom API endpoint
+      const validateResponse = await fetch('/api/auth/validate-credentials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: data.email })
+        body: JSON.stringify({ email: data.email, password: data.password })
       })
 
-      if (userResponse.ok) {
-        const userData = await userResponse.json()
-        if (userData.mfaEnabled) {
+      if (!validateResponse.ok) {
+        setError('Invalid credentials')
+        return
+      }
+
+      const validationData = await validateResponse.json()
+
+      // If credentials are valid, check if MFA is required
+      if (validationData.valid) {
+        if (validationData.mfaEnabled) {
           // User has MFA enabled, send MFA code and show MFA form
           try {
             // Send MFA code for password-based login
@@ -73,31 +80,31 @@ function LoginForm() {
             }
 
             setRequiresMfa(true)
-            setUserId(userData.userId)
+            setUserId(validationData.userId)
             setStoredCredentials({ email: data.email, password: data.password })
             return
           } catch (mfaError) {
             setError('Failed to send MFA code')
             return
           }
+        } else {
+          // No MFA required, proceed with NextAuth login
+          const result = await signIn('credentials', {
+            email: data.email,
+            password: data.password,
+            redirect: false,
+            callbackUrl: callbackUrl
+          })
+
+          if (result?.error) {
+            setError('Login failed')
+            return
+          }
+
+          if (result?.ok) {
+            window.location.href = callbackUrl
+          }
         }
-      }
-
-      // No MFA required, proceed with normal login
-      const result = await signIn('credentials', {
-        email: data.email,
-        password: data.password,
-        redirect: false,
-        callbackUrl: callbackUrl
-      })
-
-      if (result?.error) {
-        setError('Invalid credentials')
-        return
-      }
-
-      if (result?.ok) {
-        window.location.href = callbackUrl
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')
