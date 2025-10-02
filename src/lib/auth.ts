@@ -36,33 +36,34 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        // For email-only login (no password or empty password), allow if MFA is verified
-        if ((!credentials.password || credentials.password === '') && credentials.mfaVerified === 'true') {
-          return {
-            id: user.id,
-            email: user.email,
-            name: `${user.firstName} ${user.lastName}`,
-            firstName: user.firstName,
-            lastName: user.lastName
-          }
-        }
-
-
-        // For password-based login, verify password
+        // For password-based login, verify password FIRST
         if (credentials.password) {
           const isValidPassword = await verifyPassword(credentials.password, user.password)
           if (!isValidPassword) {
             return null
           }
 
-          // For MFA users, we'll handle this differently
-          // If MFA is enabled, we'll check for a special bypass flag
+          // Password is valid, now check MFA requirements
           if (user.mfaEnabled) {
-            // Check if this is an MFA bypass (when mfaVerified is provided)
+            // If MFA is enabled, only allow access if mfaVerified is true
             if (!credentials.mfaVerified || credentials.mfaVerified !== 'true') {
-              // MFA is enabled but not properly verified, deny access
+              // MFA is enabled but not verified - deny access
               return null
             }
+          }
+        } else {
+          // For email-only login (no password), allow if MFA is verified
+          if (credentials.mfaVerified === 'true') {
+            return {
+              id: user.id,
+              email: user.email,
+              name: `${user.firstName} ${user.lastName}`,
+              firstName: user.firstName,
+              lastName: user.lastName
+            }
+          } else {
+            // No password and no MFA verification, deny access
+            return null
           }
         }
 
@@ -110,14 +111,12 @@ export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
   cookies: {
     sessionToken: {
-      name: process.env.NODE_ENV === 'production' 
-        ? '__Secure-next-auth.session-token' 
-        : 'next-auth.session-token',
+      name: '__Secure-next-auth.session-token',
       options: {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
-        secure: process.env.NODE_ENV === 'production'
+        secure: true
       }
     }
   },
