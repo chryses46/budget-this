@@ -72,14 +72,14 @@ export default function AccountsPage() {
       } else {
         setAccounts([])
       }
-    } catch (error) {
+    } catch {
       setAccounts([])
     } finally {
       setIsLoading(false)
     }
   }
 
-  const onAccountSubmit = async (data: any) => {
+  const onAccountSubmit = async (data: AccountInput) => {
     try {
       if (editingAccount) {
         // Update existing account
