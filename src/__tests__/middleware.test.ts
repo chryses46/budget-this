@@ -1,5 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
-import middleware, { config } from '../middleware'
+import { config } from '../middleware'
 
 // Mock next-auth/middleware
 jest.mock('next-auth/middleware', () => ({
@@ -12,7 +11,7 @@ describe('middleware', () => {
   })
 
   it('should call withAuth with correct parameters', () => {
-    const { withAuth } = require('next-auth/middleware')
+    const { withAuth } = jest.requireMock('next-auth/middleware')
     
     // Note: Mock assertions removed due to mock setup issues
     // The withAuth function is not being called as expected
@@ -31,14 +30,14 @@ describe('middleware', () => {
   })
 
   it('should have authorized callback that checks for token', () => {
-    const { withAuth } = require('next-auth/middleware')
+    const { withAuth } = jest.requireMock('next-auth/middleware')
     
     // Note: Mock assertions removed due to mock setup issues
     expect(withAuth).toBeDefined()
   })
 
   it('should have middleware function that can be called', () => {
-    const { withAuth } = require('next-auth/middleware')
+    const { withAuth } = jest.requireMock('next-auth/middleware')
     
     // Note: Mock assertions removed due to mock setup issues
     expect(withAuth).toBeDefined()
