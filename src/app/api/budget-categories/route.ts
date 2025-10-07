@@ -20,6 +20,9 @@ export async function GET(request: NextRequest) {
       include: {
         expenditures: {
           orderBy: { createdAt: 'desc' }
+        },
+        bills: {
+          orderBy: { createdAt: 'desc' }
         }
       },
       orderBy: { createdAt: 'desc' }
