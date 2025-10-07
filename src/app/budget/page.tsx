@@ -27,6 +27,13 @@ interface BudgetCategory {
   id: string
   title: string
   limit: number
+  accountId?: string
+  account?: {
+    id: string
+    name: string
+    type: string
+    balance: number
+  }
   createdAt: string
   updatedAt: string
   expenditures: Expenditure[]
@@ -42,9 +49,17 @@ interface Expenditure {
   updatedAt: string
 }
 
+interface Account {
+  id: string
+  name: string
+  type: string
+  balance: number
+}
+
 export default function BudgetPage() {
   const { user, isLoading: userLoading } = useUser()
   const [categories, setCategories] = useState<BudgetCategory[]>([])
+  const [accounts, setAccounts] = useState<Account[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showCategoryForm, setShowCategoryForm] = useState(false)
   const [showExpenditureForm, setShowExpenditureForm] = useState(false)
@@ -62,6 +77,7 @@ export default function BudgetPage() {
   useEffect(() => {
     if (user && !userLoading) {
       fetchCategories()
+      fetchAccounts()
     }
   }, [user, userLoading])
 
@@ -78,6 +94,20 @@ export default function BudgetPage() {
       setCategories([])
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const fetchAccounts = async () => {
+    try {
+      const response = await fetch('/api/accounts')
+      if (response.ok) {
+        const data = await response.json()
+        setAccounts(data)
+      } else {
+        setAccounts([])
+      }
+    } catch (error) {
+      setAccounts([])
     }
   }
 
@@ -394,6 +424,29 @@ export default function BudgetPage() {
                     <p className="mt-1 text-sm text-red-600 dark:text-red-400">{categoryForm.formState.errors.limit.message}</p>
                   )}
                 </div>
+
+                <div>
+                  <label htmlFor="accountId" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Linked Account (Optional)
+                  </label>
+                  <select
+                    {...categoryForm.register('accountId')}
+                    className={cn(
+                      'mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                      categoryForm.formState.errors.accountId ? 'border-red-300 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+                    )}
+                  >
+                    <option value="">No Account Linked</option>
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name} ({account.type}) - ${account.balance.toFixed(2)}
+                      </option>
+                    ))}
+                  </select>
+                  {categoryForm.formState.errors.accountId && (
+                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{categoryForm.formState.errors.accountId.message}</p>
+                  )}
+                </div>
               </div>
 
               <div className="flex justify-end space-x-3">
@@ -550,6 +603,11 @@ export default function BudgetPage() {
                           {(category.expenditures?.length > 0 || category.bills?.length > 0) && (
                             <span className="ml-2 text-xs">
                               ({category.expenditures?.length || 0} expenditures, {category.bills?.length || 0} bills)
+                            </span>
+                          )}
+                          {category.account && (
+                            <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">
+                              • Linked to {category.account.name}
                             </span>
                           )}
                         </p>

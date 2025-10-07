@@ -23,6 +23,14 @@ export async function GET(request: NextRequest) {
         },
         bills: {
           orderBy: { createdAt: 'desc' }
+        },
+        account: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            balance: true
+          }
         }
       },
       orderBy: { createdAt: 'desc' }
@@ -49,12 +57,13 @@ export async function POST(request: NextRequest) {
     const userId = session.user.id
 
     const body = await request.json()
-    const { title, limit } = budgetCategorySchema.parse(body)
+    const { title, limit, accountId } = budgetCategorySchema.parse(body)
 
     const category = await prisma.budgetCategory.create({
       data: {
         title,
         limit,
+        accountId,
         userId
       }
     })

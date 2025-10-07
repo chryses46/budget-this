@@ -36,6 +36,7 @@ export const updateBillSchema = billSchema.partial()
 export const budgetCategorySchema = z.object({
   title: z.string().min(1, 'Title is required'),
   limit: z.number().positive('Limit must be positive'),
+  accountId: z.string().optional(),
 })
 
 export const updateBudgetCategorySchema = budgetCategorySchema.partial()
@@ -54,7 +55,7 @@ export const plaidLinkSchema = z.object({
   publicToken: z.string().min(1),
 })
 
-export const accountSchema = z.object({
+export const plaidAccountSchema = z.object({
   plaidAccountId: z.string().min(1),
   name: z.string().min(1),
   type: z.string().min(1),
@@ -93,5 +94,32 @@ export type UpdateBudgetCategoryInput = z.infer<typeof updateBudgetCategorySchem
 export type ExpenditureInput = z.infer<typeof expenditureSchema>
 export type UpdateExpenditureInput = z.infer<typeof updateExpenditureSchema>
 export type PlaidLinkInput = z.infer<typeof plaidLinkSchema>
-export type AccountInput = z.infer<typeof accountSchema>
 export type TransactionInput = z.infer<typeof transactionSchema>
+
+// Account schemas
+export const accountSchema = z.object({
+  name: z.string().min(1, 'Account name is required'),
+  type: z.string().min(1, 'Account type is required'),
+  subtype: z.string().optional(),
+  institution: z.string().optional(),
+  institutionId: z.string().optional(),
+  balance: z.number().min(0, 'Balance must be non-negative').default(0),
+  isMain: z.boolean().default(false),
+})
+
+export const updateAccountSchema = accountSchema.partial()
+
+// Account Transaction schemas
+export const accountTransactionSchema = z.object({
+  type: z.enum(['deposit', 'withdrawal']),
+  amount: z.number().positive('Amount must be positive'),
+  description: z.string().min(1, 'Description is required'),
+})
+
+export const updateAccountTransactionSchema = accountTransactionSchema.partial()
+
+// Types
+export type PlaidAccountInput = z.infer<typeof plaidAccountSchema>
+export type UpdateAccountInput = z.infer<typeof updateAccountSchema>
+export type AccountTransactionInput = z.infer<typeof accountTransactionSchema>
+export type UpdateAccountTransactionInput = z.infer<typeof updateAccountTransactionSchema>
