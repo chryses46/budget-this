@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { accountSchema } from '@/lib/validations'
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
@@ -13,16 +14,17 @@ export async function GET() {
       )
     }
     const userId = session.user.id
-
+    
     const accounts = await prisma.account.findMany({
       where: { userId },
       include: {
-        transactions: {
-          orderBy: { date: 'desc' },
-          take: 5, // Fetch latest 5 transactions for each account
+        accountTransactions: {
+          orderBy: { createdAt: 'desc' },
+          take: 5
         },
+        budgetCategories: true
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'desc' }
     })
 
     return NextResponse.json(accounts)
@@ -46,17 +48,33 @@ export async function POST(request: NextRequest) {
     const userId = session.user.id
 
     const body = await request.json()
-    const { plaidAccountId, name, type, subtype, institution, institutionId } = body
+    const { name, type, subtype, institution, institutionId, balance, isMain } = accountSchema.parse(body)
+
+    // If this is being set as main account, unset other main accounts
+    if (isMain) {
+      await prisma.account.updateMany({
+        where: { userId, isMain: true },
+        data: { isMain: false }
+      })
+    }
 
     const account = await prisma.account.create({
       data: {
-        plaidAccountId,
         name,
         type,
         subtype,
         institution,
         institutionId,
+        balance,
+        isMain,
         userId
+      },
+      include: {
+        accountTransactions: {
+          orderBy: { createdAt: 'desc' },
+          take: 5
+        },
+        budgetCategories: true
       }
     })
 

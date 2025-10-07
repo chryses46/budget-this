@@ -42,9 +42,10 @@ model User {
   budgetCategories BudgetCategory[]
   expenditures   Expenditure[]
   passwordResets PasswordReset[]
-  accounts       Account[]
-  transactions   Transaction[]
-  mfaCodes       MfaCode[]
+  accounts            Account[]
+  transactions        Transaction[]
+  accountTransactions AccountTransaction[]
+  mfaCodes            MfaCode[]
 
   @@map("users")
 }
@@ -71,6 +72,8 @@ model BudgetCategory {
   id       String @id @default(uuid())
   title    String
   limit    Float
+  accountId String?
+  account  Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
   userId   String
   user     User @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
@@ -122,18 +125,22 @@ model MfaCode {
 
 model Account {
   id            String   @id @default(uuid())
-  plaidAccountId String  @unique
+  plaidAccountId String? @unique
   name          String
-  type          String   // checking, savings, credit, etc.
-  subtype       String?  // checking, savings, credit_card, etc.
-  institution   String
-  institutionId String
+  type          String   // checking, savings, credit, cash, etc.
+  subtype       String?  // checking, savings, credit_card, cash, etc.
+  institution   String?
+  institutionId String?
+  balance       Float    @default(0)
+  isMain        Boolean  @default(false)
   userId        String
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  transactions  Transaction[]
+  transactions        Transaction[]
+  accountTransactions AccountTransaction[]
+  budgetCategories    BudgetCategory[]
 
   @@map("accounts")
 }
@@ -162,4 +169,19 @@ model Transaction {
   updatedAt         DateTime         @updatedAt
 
   @@map("transactions")
+}
+
+model AccountTransaction {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  type        String   // deposit, withdrawal
+  amount      Float
+  description String
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("account_transactions")
 }

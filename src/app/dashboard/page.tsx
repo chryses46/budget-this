@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Calendar, TrendingUp, AlertCircle, Plus, CreditCard, PieChart, CheckCircle } from 'lucide-react'
+import { Calendar, TrendingUp, AlertCircle, Plus, CreditCard, PieChart, CheckCircle, Star } from 'lucide-react'
 import { Navigation } from '@/components/Navigation'
 import { useUser } from '@/contexts/UserContext'
 
@@ -34,8 +34,23 @@ interface BudgetCategory {
   }>
 }
 
+interface Account {
+  id: string
+  name: string
+  type: string
+  subtype?: string
+  institution?: string
+  institutionId?: string
+  balance: number
+  isMain: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 interface DashboardData {
   totalAccounts: number
+  totalAssets: number
+  accounts: Account[]
   topBills: Array<{ title: string; amount: number }>
   upcomingBills: Array<{ title: string; amount: number; dayDue: number; frequency: string; isPaid: boolean; paidAt?: string }>
   spendingCategories: Array<{ category: string; amount: number; remaining: number }>
@@ -57,14 +72,16 @@ export default function DashboardPage() {
     try {
       setIsLoading(true)
       
-      // Fetch bills and budget categories in parallel
-      const [billsResponse, categoriesResponse] = await Promise.all([
+      // Fetch bills, budget categories, and accounts in parallel
+      const [billsResponse, categoriesResponse, accountsResponse] = await Promise.all([
         fetch('/api/bills'),
-        fetch('/api/budget-categories')
+        fetch('/api/budget-categories'),
+        fetch('/api/accounts')
       ])
 
       const bills: Bill[] = billsResponse.ok ? await billsResponse.json() : []
       const categories: BudgetCategory[] = categoriesResponse.ok ? await categoriesResponse.json() : []
+      const accounts: Account[] = accountsResponse.ok ? await accountsResponse.json() : []
 
       // Process bills data
       const topBills = bills
@@ -92,8 +109,13 @@ export default function DashboardPage() {
         .sort((a, b) => a.remaining - b.remaining) // Least remaining first (most urgent)
         .slice(0, 5)
 
+      // Calculate total assets from all accounts
+      const totalAssets = accounts.reduce((sum, account) => sum + account.balance, 0)
+
       setData({
-        totalAccounts: 0, // Will be updated when bank accounts are connected
+        totalAccounts: accounts.length,
+        totalAssets,
+        accounts,
         topBills,
         upcomingBills,
         spendingCategories,
@@ -102,6 +124,8 @@ export default function DashboardPage() {
     } catch (error) {
       setData({
         totalAccounts: 0,
+        totalAssets: 0,
+        accounts: [],
         topBills: [],
         upcomingBills: [],
         spendingCategories: [],
@@ -187,22 +211,72 @@ export default function DashboardPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Total Accounts */}
+          {/* Total Assets */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <div className="flex items-center">
+            <div className="flex items-center mb-4">
               <div className="flex-shrink-0">
                 <CreditCard className="h-8 w-8 text-indigo-600" />
               </div>
               <div className="ml-4">
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white">Total Accounts</h3>
-                <p className="text-3xl font-bold text-gray-900 dark:text-white">$0.00</p>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white">Total Assets</h3>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white">${data?.totalAssets.toFixed(2) || '0.00'}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{data?.totalAccounts || 0} account{(data?.totalAccounts || 0) !== 1 ? 's' : ''}</p>
               </div>
             </div>
+            
+            {/* Accounts Section */}
             <div className="mt-4">
-              <Link href="/accounts" className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 flex items-center justify-center">
+              <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Accounts</h4>
+              {data?.accounts.length === 0 ? (
+                <div className="text-center py-4">
+                  <p className="text-gray-500 dark:text-gray-400 mb-3">No accounts added yet</p>
+                  <Link href="/accounts" className="bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 flex items-center justify-center text-sm">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Your First Account
+                  </Link>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {data?.accounts
+                    .sort((a, b) => b.balance - a.balance) // Sort by balance (highest to lowest)
+                    .slice(0, 3)
+                    .map((account) => (
+                    <div key={account.id} className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+                      <div className="flex items-center space-x-2">
+                        <CreditCard className="h-4 w-4 text-indigo-600" />
+                        <div>
+                          <div className="flex items-center space-x-1">
+                            <span className="text-gray-900 dark:text-white text-sm font-medium">{account.name}</span>
+                            {account.isMain && (
+                              <Star className="h-3 w-3 text-yellow-500 fill-current" />
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">
+                            {account.type}{account.subtype && ` • ${account.subtype}`}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-sm font-bold text-gray-900 dark:text-white">
+                        ${account.balance.toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                  {data?.accounts && data.accounts.length > 3 && (
+                    <div className="pt-2">
+                      <Link href="/accounts" className="w-full bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white py-2 px-3 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-sm">
+                        <Plus className="h-3 w-3 mr-2" />
+                        View All {data.accounts.length} Accounts
+                      </Link>
+                    </div>
+                  )}
+                  <Link href="/accounts" className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md 
+              hover:bg-indigo-700 flex items-center justify-center">
                 <Plus className="h-4 w-4 mr-2" />
-                Connect Bank Account
+                {data?.totalAccounts === 0 ? 'Add Account' : 'Manage Accounts'}
               </Link>
+                </div>
+                
+              )}
             </div>
           </div>
 
@@ -314,6 +388,7 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
+
 
           {/* Burn Down Chart */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 md:col-span-2 lg:col-span-1">
