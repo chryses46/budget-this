@@ -46,3 +46,9 @@ public/*
 
 /certs
 /scripts
+/src/__tests__/*
+/src/lib/__tests__/*
+/src/app/api/auth/__tests__/*
+
+jest.config.js
+jest.setup.js

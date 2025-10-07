@@ -2,6 +2,7 @@
   "name": "budget-this",
   "version": "0.5.0",
   "private": true,
+  "cacheDirectories": [".next/cache"],
   "scripts": {
     "dev": "prisma generate && next dev --turbopack --port 44351",
     "dev:https": "prisma generate && next dev --turbopack --port 44351 --experimental-https --experimental-https-key ./certs/localhost-key.pem --experimental-https-cert ./certs/localhost.pem",
