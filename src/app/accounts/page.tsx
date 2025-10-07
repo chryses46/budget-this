@@ -49,7 +49,7 @@ export default function AccountsPage() {
   const [editingAccount, setEditingAccount] = useState<Account | null>(null)
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null)
 
-  const accountForm = useForm<AccountInput>({
+  const accountForm = useForm({
     resolver: zodResolver(accountSchema),
   })
 
@@ -79,7 +79,7 @@ export default function AccountsPage() {
     }
   }
 
-  const onAccountSubmit = async (data: AccountInput) => {
+  const onAccountSubmit = async (data: any) => {
     try {
       if (editingAccount) {
         // Update existing account
