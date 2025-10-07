@@ -20,11 +20,11 @@ export async function PUT(
 
     const { id } = await params
     const body = await request.json()
-    const { title, amount, dayDue, frequency } = updateBillSchema.parse(body)
+    const { title, amount, dayDue, frequency, budgetCategoryId } = updateBillSchema.parse(body)
 
     const bill = await prisma.bill.update({
       where: { id, userId },
-      data: { title, amount, dayDue, frequency }
+      data: { title, amount, dayDue, frequency, budgetCategoryId }
     })
 
     return NextResponse.json(bill)

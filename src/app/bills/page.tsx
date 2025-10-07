@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
 import { billSchema, BillInput } from '@/lib/validations'
 import { cn } from '@/lib/utils'
-import { Plus, Edit, Trash2, Calendar, DollarSign } from 'lucide-react'
+import { Plus, Edit, Trash2, Calendar, DollarSign, CheckCircle } from 'lucide-react'
 import { Navigation } from '@/components/Navigation'
 import { useUser } from '@/contexts/UserContext'
 
@@ -16,13 +16,28 @@ interface Bill {
   amount: number
   dayDue: number
   frequency: 'Weekly' | 'Monthly' | 'Yearly'
+  budgetCategoryId?: string
+  budgetCategory?: {
+    id: string
+    title: string
+    limit: number
+  }
+  isPaid: boolean
+  paidAt?: string
   createdAt: string
   updatedAt: string
+}
+
+interface BudgetCategory {
+  id: string
+  title: string
+  limit: number
 }
 
 export default function BillsPage() {
   const { user, isLoading: userLoading } = useUser()
   const [bills, setBills] = useState<Bill[]>([])
+  const [budgetCategories, setBudgetCategories] = useState<BudgetCategory[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingBill, setEditingBill] = useState<Bill | null>(null)
@@ -39,6 +54,7 @@ export default function BillsPage() {
   useEffect(() => {
     if (user && !userLoading) {
       fetchBills()
+      fetchBudgetCategories()
     }
   }, [user, userLoading])
 
@@ -55,6 +71,20 @@ export default function BillsPage() {
       setBills([])
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const fetchBudgetCategories = async () => {
+    try {
+      const response = await fetch('/api/budget-categories')
+      if (response.ok) {
+        const data = await response.json()
+        setBudgetCategories(data)
+      } else {
+        setBudgetCategories([])
+      }
+    } catch (error) {
+      setBudgetCategories([])
     }
   }
 
@@ -101,6 +131,8 @@ export default function BillsPage() {
     setEditingBill(bill)
     reset(bill)
     setShowForm(true)
+    // Scroll to top of the page to show the edit form
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleDelete = async (id: string) => {
@@ -121,6 +153,66 @@ export default function BillsPage() {
     reset()
     setShowForm(false)
     setEditingBill(null)
+  }
+
+  const isBillLate = (bill: Bill) => {
+    if (bill.isPaid) return false
+    
+    const today = new Date()
+    const currentDay = today.getDate()
+    
+    // For monthly bills, check if we're past the due day this month
+    if (bill.frequency === 'Monthly') {
+      return currentDay > bill.dayDue
+    }
+    
+    // For weekly bills, check if it's been more than 7 days since creation
+    if (bill.frequency === 'Weekly') {
+      const billDate = new Date(bill.createdAt)
+      const daysDiff = Math.floor((today.getTime() - billDate.getTime()) / (1000 * 60 * 60 * 24))
+      return daysDiff > 7
+    }
+    
+    // For yearly bills, check if it's been more than 365 days since creation
+    if (bill.frequency === 'Yearly') {
+      const billDate = new Date(bill.createdAt)
+      const daysDiff = Math.floor((today.getTime() - billDate.getTime()) / (1000 * 60 * 60 * 24))
+      return daysDiff > 365
+    }
+    
+    return false
+  }
+
+  const handlePayBill = async (bill: Bill) => {
+    if (!bill.budgetCategoryId) {
+      alert('This bill must be assigned to a budget category before it can be paid.')
+      return
+    }
+
+    if (!confirm(`Are you sure you want to mark ${bill.title} as paid for $${bill.amount.toFixed(2)}?`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/bills/${bill.id}/pay`, {
+        method: 'POST'
+      })
+      
+      if (response.ok) {
+        // Update the bill in the local state
+        setBills(bills.map(b => 
+          b.id === bill.id 
+            ? { ...b, isPaid: true, paidAt: new Date().toISOString() }
+            : b
+        ))
+        alert('Bill marked as paid!')
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Failed to pay bill')
+      }
+    } catch (error) {
+      alert('Failed to pay bill')
+    }
   }
 
   if (userLoading || isLoading) {
@@ -159,7 +251,11 @@ export default function BillsPage() {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Bills</h1>
           <button
-            onClick={() => setShowForm(true)}
+            onClick={() => {
+              setShowForm(true)
+              // Scroll to top to show the form
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }}
             className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center"
           >
             <Plus className="h-4 w-4 mr-2" />
@@ -167,6 +263,33 @@ export default function BillsPage() {
           </button>
         </div>
 
+        {/*Bill Total */}
+        {bills.length === 0 ? (
+            <div className="text-center py-12">
+              <Calendar className="h-12 w-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No bills yet</h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-4">Get started by adding your first bill</p>
+              <button
+                onClick={() => {
+                  setShowForm(true)
+                  // Scroll to top to show the form
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                }}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center mx-auto"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Your First Bill
+              </button>
+            </div>
+          ) : (
+          <div className="text-center bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+            <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+              Monthly Bill Total :
+              <p className="text-3xl font-bold text-gray-900 dark:text-white">${bills.reduce((total, bill) => total + (bill.frequency === 'Monthly' ? bill.amount : 0), 0).toFixed(2)}</p>
+            </h2>
+          </div>
+          )}
+        {/*Edit Bill Form */}
         {showForm && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
             <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
@@ -252,6 +375,29 @@ export default function BillsPage() {
                     <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.frequency.message}</p>
                   )}
                 </div>
+
+                <div>
+                  <label htmlFor="budgetCategoryId" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Budget Category (Optional)
+                  </label>
+                  <select
+                    {...register('budgetCategoryId')}
+                    className={cn(
+                      'mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                      errors.budgetCategoryId ? 'border-red-300 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+                    )}
+                  >
+                    <option value="">No Budget Category</option>
+                    {budgetCategories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.title} (Limit: ${category.limit.toFixed(2)})
+                      </option>
+                    ))}
+                  </select>
+                  {errors.budgetCategoryId && (
+                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.budgetCategoryId.message}</p>
+                  )}
+                </div>
               </div>
 
               <div className="flex justify-end space-x-3">
@@ -281,7 +427,11 @@ export default function BillsPage() {
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No bills yet</h3>
               <p className="text-gray-500 dark:text-gray-400 mb-4">Get started by adding your first bill</p>
               <button
-                onClick={() => setShowForm(true)}
+                onClick={() => {
+                  setShowForm(true)
+                  // Scroll to top to show the form
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                }}
                 className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center mx-auto"
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -302,23 +452,57 @@ export default function BillsPage() {
                         </span>
                         <span className="flex items-center">
                           <Calendar className="h-4 w-4 mr-1" />
-                          Due on {bill.dayDue}
+                          Due on the {bill.dayDue}{
+                        bill.dayDue === 1 ? 'st' : 
+                        bill.dayDue === 2 ? 'nd' : 
+                        bill.dayDue === 3 ? 'rd' : 
+                        bill.dayDue === 21 ? 'st' :
+                        bill.dayDue === 22 ? 'nd' :
+                        bill.dayDue === 23 ? 'rd' :
+                        bill.dayDue === 31 ? 'st' :
+                        'th'}
                         </span>
                         <span className="px-2 py-1 bg-gray-100 dark:bg-gray-600 rounded-full text-xs text-gray-700 dark:text-gray-300">
                           {bill.frequency}
                         </span>
+                        {bill.budgetCategory && (
+                          <span className="px-2 py-1 bg-blue-100 dark:bg-blue-600 rounded-full text-xs text-blue-700 dark:text-blue-300">
+                            {bill.budgetCategory.title}
+                          </span>
+                        )}
+                        {bill.isPaid && (
+                          <span className="px-2 py-1 bg-green-100 dark:bg-green-600 rounded-full text-xs text-green-700 dark:text-green-300">
+                            Paid
+                          </span>
+                        )}
+                        {!bill.isPaid && isBillLate(bill) && (
+                          <span className="px-2 py-1 bg-red-100 dark:bg-red-600 rounded-full text-xs text-red-700 dark:text-red-300">
+                            Late
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
+                      {bill.budgetCategoryId && !bill.isPaid && (
+                        <button
+                          onClick={() => handlePayBill(bill)}
+                          className="p-2 text-gray-400 dark:text-gray-500 hover:text-green-600 dark:hover:text-green-400"
+                          title="Pay Bill"
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                        </button>
+                      )}
                       <button
                         onClick={() => handleEdit(bill)}
                         className="p-2 text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400"
+                        title="Edit Bill"
                       >
                         <Edit className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(bill.id)}
                         className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400"
+                        title="Delete Bill"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>

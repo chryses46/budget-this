@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Calendar, TrendingUp, AlertCircle, Plus, CreditCard, PieChart } from 'lucide-react'
+import { Calendar, TrendingUp, AlertCircle, Plus, CreditCard, PieChart, CheckCircle } from 'lucide-react'
 import { Navigation } from '@/components/Navigation'
 import { useUser } from '@/contexts/UserContext'
 
@@ -12,6 +12,8 @@ interface Bill {
   amount: number
   dayDue: number
   frequency: 'Weekly' | 'Monthly' | 'Yearly'
+  isPaid: boolean
+  paidAt?: string
   createdAt: string
   updatedAt: string
 }
@@ -35,7 +37,7 @@ interface BudgetCategory {
 interface DashboardData {
   totalAccounts: number
   topBills: Array<{ title: string; amount: number }>
-  upcomingBills: Array<{ title: string; amount: number; dayDue: number; frequency: string }>
+  upcomingBills: Array<{ title: string; amount: number; dayDue: number; frequency: string; isPaid: boolean; paidAt?: string }>
   spendingCategories: Array<{ category: string; amount: number; remaining: number }>
   burnDownData: Array<{ month: string; remaining: number }>
 }
@@ -143,6 +145,8 @@ export default function DashboardPage() {
           amount: bill.amount,
           dayDue: nextDueDate.getDate(),
           frequency: bill.frequency,
+          isPaid: bill.isPaid,
+          paidAt: bill.paidAt,
           dueDate: nextDueDate
         }
       })
@@ -249,8 +253,28 @@ export default function DashboardPage() {
                 {data?.upcomingBills.map((bill, index) => (
                   <div key={index} className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
                     <div>
-                      <span className="text-gray-900 dark:text-white">{bill.title}</span>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Due on {bill.dayDue}</p>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-gray-900 dark:text-white">{bill.title}</span>
+                        {bill.isPaid && (
+                          <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Due on the {bill.dayDue}{
+                        bill.dayDue === 1 ? 'st' : 
+                        bill.dayDue === 2 ? 'nd' : 
+                        bill.dayDue === 3 ? 'rd' : 
+                        bill.dayDue === 21 ? 'st' :
+                        bill.dayDue === 22 ? 'nd' :
+                        bill.dayDue === 23 ? 'rd' :
+                        bill.dayDue === 31 ? 'st' :
+                        'th'}
+                        {bill.isPaid && bill.paidAt && (
+                          <span className="ml-2 text-green-600 dark:text-green-400">
+                            • Paid on {new Date(bill.paidAt).toLocaleDateString()}
+                          </span>
+                        )}
+                      </p>
                     </div>
                     <span className="font-medium text-gray-900 dark:text-white">${bill.amount.toFixed(2)}</span>
                   </div>

@@ -10,6 +10,19 @@ import { Plus, Edit, Trash2, DollarSign, PieChart } from 'lucide-react'
 import { Navigation } from '@/components/Navigation'
 import { useUser } from '@/contexts/UserContext'
 
+interface Bill {
+  id: string
+  title: string
+  amount: number
+  dayDue: number
+  frequency: 'Weekly' | 'Monthly' | 'Yearly'
+  budgetCategoryId?: string
+  isPaid: boolean
+  paidAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
 interface BudgetCategory {
   id: string
   title: string
@@ -17,6 +30,7 @@ interface BudgetCategory {
   createdAt: string
   updatedAt: string
   expenditures: Expenditure[]
+  bills: Bill[]
 }
 
 interface Expenditure {
@@ -156,12 +170,16 @@ export default function BudgetPage() {
     setEditingCategory(category)
     categoryForm.reset(category)
     setShowCategoryForm(true)
+    // Scroll to top of the page to show the edit form
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleEditExpenditure = (expenditure: Expenditure) => {
     setEditingExpenditure(expenditure)
     expenditureForm.reset(expenditure)
     setShowExpenditureForm(true)
+    // Scroll to top of the page to show the edit form
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleDeleteCategory = async (id: string) => {
@@ -197,11 +215,73 @@ export default function BudgetPage() {
   }
 
   const getTotalSpent = (category: BudgetCategory) => {
-    return (category.expenditures || []).reduce((sum, exp) => sum + exp.amount, 0)
+    const expenditureTotal = (category.expenditures || []).reduce((sum, exp) => sum + exp.amount, 0)
+    const paidBillTotal = (category.bills || []).filter(bill => bill.isPaid).reduce((sum, bill) => sum + bill.amount, 0)
+    return expenditureTotal + paidBillTotal
   }
 
   const getRemainingBudget = (category: BudgetCategory) => {
     return category.limit - getTotalSpent(category)
+  }
+
+  const isBillLate = (bill: Bill) => {
+    if (bill.isPaid) return false
+    
+    const today = new Date()
+    const currentDay = today.getDate()
+    const currentMonth = today.getMonth()
+    const currentYear = today.getFullYear()
+    
+    // For monthly bills, check if we're past the due day this month
+    if (bill.frequency === 'Monthly') {
+      return currentDay > bill.dayDue
+    }
+    
+    // For weekly bills, check if it's been more than 7 days since creation
+    if (bill.frequency === 'Weekly') {
+      const billDate = new Date(bill.createdAt)
+      const daysDiff = Math.floor((today.getTime() - billDate.getTime()) / (1000 * 60 * 60 * 24))
+      return daysDiff > 7
+    }
+    
+    // For yearly bills, check if it's been more than 365 days since creation
+    if (bill.frequency === 'Yearly') {
+      const billDate = new Date(bill.createdAt)
+      const daysDiff = Math.floor((today.getTime() - billDate.getTime()) / (1000 * 60 * 60 * 24))
+      return daysDiff > 365
+    }
+    
+    return false
+  }
+
+  const handlePayBill = async (bill: Bill) => {
+    if (!confirm(`Are you sure you want to mark "${bill.title}" as paid for $${bill.amount.toFixed(2)}?`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/bills/${bill.id}/pay`, {
+        method: 'POST'
+      })
+      
+      if (response.ok) {
+        // Update the bill in the local state
+        setCategories(categories.map(cat => ({
+          ...cat,
+          bills: cat.bills.map(b => 
+            b.id === bill.id 
+              ? { ...b, isPaid: true, paidAt: new Date().toISOString() }
+              : b
+          )
+        })))
+        alert('Bill marked as paid!')
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Failed to pay bill')
+      }
+    } catch (error) {
+      alert('Failed to pay bill')
+    }
   }
 
   if (userLoading || isLoading) {
@@ -241,7 +321,11 @@ export default function BudgetPage() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Budget</h1>
           <div className="flex space-x-2">
             <button
-              onClick={() => setShowCategoryForm(true)}
+              onClick={() => {
+                setShowCategoryForm(true)
+                // Scroll to top to show the form
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
               className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center"
             >
               <Plus className="h-4 w-4 mr-2" />
@@ -249,7 +333,11 @@ export default function BudgetPage() {
             </button>
             {categories.length > 0 && (
               <button
-                onClick={() => setShowExpenditureForm(true)}
+                onClick={() => {
+                  setShowExpenditureForm(true)
+                  // Scroll to top to show the form
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                }}
                 className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center"
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -433,7 +521,11 @@ export default function BudgetPage() {
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No budget categories yet</h3>
             <p className="text-gray-500 dark:text-gray-400 mb-4">Get started by creating your first budget category</p>
             <button
-              onClick={() => setShowCategoryForm(true)}
+              onClick={() => {
+                setShowCategoryForm(true)
+                // Scroll to top to show the form
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
               className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center mx-auto"
             >
               <Plus className="h-4 w-4 mr-2" />
@@ -455,6 +547,11 @@ export default function BudgetPage() {
                         <h3 className="text-lg font-medium text-gray-900 dark:text-white">{category.title}</h3>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
                           ${totalSpent.toFixed(2)} of ${category.limit.toFixed(2)} spent
+                          {(category.expenditures?.length > 0 || category.bills?.length > 0) && (
+                            <span className="ml-2 text-xs">
+                              ({category.expenditures?.length || 0} expenditures, {category.bills?.length || 0} bills)
+                            </span>
+                          )}
                         </p>
                       </div>
                       <div className="flex items-center space-x-2">
@@ -503,6 +600,8 @@ export default function BudgetPage() {
                           onClick={() => {
                             expenditureForm.setValue('categoryId', category.id)
                             setShowExpenditureForm(true)
+                            // Scroll to top to show the form
+                            window.scrollTo({ top: 0, behavior: 'smooth' })
                           }}
                           className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 text-sm flex items-center"
                         >
@@ -540,6 +639,66 @@ export default function BudgetPage() {
                               </div>
                             </div>
                           ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Bills */}
+                    <div className="mt-6">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-md font-medium text-gray-900 dark:text-white">Bills</h4>
+                      </div>
+
+                      {(category.bills || []).length === 0 ? (
+                        <p className="text-gray-500 dark:text-gray-400 text-sm">No bills assigned to this category</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {(category.bills || []).map((bill) => {
+                            const isLate = isBillLate(bill)
+                            const isPaid = bill.isPaid
+                            
+                            return (
+                              <div key={bill.id} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700">
+                                <div>
+                                  <div className="flex items-center space-x-2">
+                                    <span className="text-gray-900 dark:text-white">{bill.title}</span>
+                                    {isPaid && (
+                                      <span className="px-2 py-1 bg-green-100 dark:bg-green-600 rounded-full text-xs text-green-700 dark:text-green-300">
+                                        Paid
+                                      </span>
+                                    )}
+                                    {isLate && !isPaid && (
+                                      <span className="px-2 py-1 bg-red-100 dark:bg-red-600 rounded-full text-xs text-red-700 dark:text-red-300">
+                                        Late
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                                    Due on {bill.dayDue} • {bill.frequency}
+                                    {isPaid && bill.paidAt && (
+                                      <span className="ml-2">
+                                        • Paid on {new Date(bill.paidAt).toLocaleDateString()}
+                                      </span>
+                                    )}
+                                  </p>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <span className="font-medium text-gray-900 dark:text-white">${bill.amount.toFixed(2)}</span>
+                                  {!isPaid && (
+                                    <button
+                                      onClick={() => handlePayBill(bill)}
+                                      className="px-3 py-1 bg-green-600 text-white text-xs rounded-md hover:bg-green-700"
+                                    >
+                                      Pay
+                                    </button>
+                                  )}
+                                  <span className="px-2 py-1 bg-blue-100 dark:bg-blue-600 rounded-full text-xs text-blue-700 dark:text-blue-300">
+                                    Bill
+                                  </span>
+                                </div>
+                              </div>
+                            )
+                          })}
                         </div>
                       )}
                     </div>

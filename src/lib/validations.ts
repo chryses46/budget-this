@@ -27,6 +27,7 @@ export const billSchema = z.object({
   amount: z.number().positive('Amount must be positive'),
   dayDue: z.number().min(1).max(31, 'Day due must be between 1 and 31'),
   frequency: z.enum(['Weekly', 'Monthly', 'Yearly']),
+  budgetCategoryId: z.string().optional(),
 })
 
 export const updateBillSchema = billSchema.partial()

@@ -17,6 +17,15 @@ export async function GET(request: NextRequest) {
     
     const bills = await prisma.bill.findMany({
       where: { userId },
+      include: {
+        budgetCategory: {
+          select: {
+            id: true,
+            title: true,
+            limit: true
+          }
+        }
+      },
       orderBy: { createdAt: 'desc' }
     })
 
@@ -41,7 +50,7 @@ export async function POST(request: NextRequest) {
     const userId = session.user.id
 
     const body = await request.json()
-    const { title, amount, dayDue, frequency } = billSchema.parse(body)
+    const { title, amount, dayDue, frequency, budgetCategoryId } = billSchema.parse(body)
 
     const bill = await prisma.bill.create({
       data: {
@@ -49,6 +58,7 @@ export async function POST(request: NextRequest) {
         amount,
         dayDue,
         frequency,
+        budgetCategoryId,
         userId
       }
     })
