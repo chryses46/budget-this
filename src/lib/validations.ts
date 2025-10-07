@@ -103,8 +103,8 @@ export const accountSchema = z.object({
   subtype: z.string().optional(),
   institution: z.string().optional(),
   institutionId: z.string().optional(),
-  balance: z.number().min(0, 'Balance must be non-negative').default(0),
-  isMain: z.boolean().default(false),
+  balance: z.number().min(0, 'Balance must be non-negative').optional().default(0),
+  isMain: z.boolean().optional().default(false),
 })
 
 export const updateAccountSchema = accountSchema.partial()
@@ -119,6 +119,7 @@ export const accountTransactionSchema = z.object({
 export const updateAccountTransactionSchema = accountTransactionSchema.partial()
 
 // Types
+export type AccountInput = z.infer<typeof accountSchema>
 export type PlaidAccountInput = z.infer<typeof plaidAccountSchema>
 export type UpdateAccountInput = z.infer<typeof updateAccountSchema>
 export type AccountTransactionInput = z.infer<typeof accountTransactionSchema>

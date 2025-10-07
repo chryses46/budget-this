@@ -1,19 +1,22 @@
 -- AlterTable
-ALTER TABLE `accounts` ADD COLUMN `balance` DOUBLE NOT NULL DEFAULT 0,
+ALTER TABLE `accounts` 
+    ADD COLUMN `balance` DOUBLE NOT NULL DEFAULT 0,
     ADD COLUMN `isMain` BOOLEAN NOT NULL DEFAULT false,
     MODIFY `plaidAccountId` VARCHAR(191) NULL,
     MODIFY `institution` VARCHAR(191) NULL,
     MODIFY `institutionId` VARCHAR(191) NULL;
 
 -- AlterTable
-ALTER TABLE `bills` ADD COLUMN `isPaid` BOOLEAN NOT NULL DEFAULT false,
+ALTER TABLE `bills` 
+    ADD COLUMN `isPaid` BOOLEAN NOT NULL DEFAULT false,
     ADD COLUMN `paidAt` DATETIME(3) NULL;
 
 -- AlterTable
-ALTER TABLE `budget_categories` ADD COLUMN `accountId` VARCHAR(191) NULL;
+ALTER TABLE `budget_categories` 
+    ADD COLUMN `accountId` VARCHAR(191) NULL;
 
 -- CreateTable
-CREATE TABLE `account_transactions` (
+CREATE TABLE IF NOT EXISTS `account_transactions` (
     `id` VARCHAR(191) NOT NULL,
     `accountId` VARCHAR(191) NOT NULL,
     `type` VARCHAR(191) NOT NULL,
