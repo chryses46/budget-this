@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
           }
         }
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { dayDue: 'asc' }
     })
 
     return NextResponse.json(bills)

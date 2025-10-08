@@ -441,48 +441,52 @@ export default function BillsPage() {
           ) : (
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
               {bills.map((bill) => (
-                <div key={bill.id} className="p-6 hover:bg-gray-50 dark:hover:bg-gray-700">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <h3 className="text-lg font-medium text-gray-900 dark:text-white">{bill.title}</h3>
-                      <div className="mt-1 flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
-                        <span className="flex items-center">
-                          <DollarSign className="h-4 w-4 mr-1" />
-                          ${bill.amount.toFixed(2)}
-                        </span>
-                        <span className="flex items-center">
-                          <Calendar className="h-4 w-4 mr-1" />
-                          Due on the {bill.dayDue}{
-                        bill.dayDue === 1 ? 'st' : 
-                        bill.dayDue === 2 ? 'nd' : 
-                        bill.dayDue === 3 ? 'rd' : 
-                        bill.dayDue === 21 ? 'st' :
-                        bill.dayDue === 22 ? 'nd' :
-                        bill.dayDue === 23 ? 'rd' :
-                        bill.dayDue === 31 ? 'st' :
-                        'th'}
-                        </span>
-                        <span className="px-2 py-1 bg-gray-100 dark:bg-gray-600 rounded-full text-xs text-gray-700 dark:text-gray-300">
-                          {bill.frequency}
-                        </span>
-                        {bill.budgetCategory && (
-                          <span className="px-2 py-1 bg-blue-100 dark:bg-blue-600 rounded-full text-xs text-blue-700 dark:text-blue-300">
-                            {bill.budgetCategory.title}
+                <div key={bill.id} className="p-4 sm:p-6 hover:bg-gray-50 dark:hover:bg-gray-700">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-lg font-medium text-gray-900 dark:text-white truncate">{bill.title}</h3>
+                      <div className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+                          <span className="flex items-center whitespace-nowrap">
+                            {/*<DollarSign className="h-4 w-4 mr-1 flex-shrink-0" />*/}
+                            ${bill.amount.toFixed(2)}
                           </span>
-                        )}
-                        {bill.isPaid && (
-                          <span className="px-2 py-1 bg-green-100 dark:bg-green-600 rounded-full text-xs text-green-700 dark:text-green-300">
-                            Paid
+                          <span className="flex items-center whitespace-nowrap">
+                            <Calendar className="h-4 w-4 mr-1 flex-shrink-0" />
+                          {bill.dayDue}{
+                          bill.dayDue === 1 ? 'st' : 
+                          bill.dayDue === 2 ? 'nd' : 
+                          bill.dayDue === 3 ? 'rd' : 
+                          bill.dayDue === 21 ? 'st' :
+                          bill.dayDue === 22 ? 'nd' :
+                          bill.dayDue === 23 ? 'rd' :
+                          bill.dayDue === 31 ? 'st' :
+                          'th'}
                           </span>
-                        )}
-                        {!bill.isPaid && isBillLate(bill) && (
-                          <span className="px-2 py-1 bg-red-100 dark:bg-red-600 rounded-full text-xs text-red-700 dark:text-red-300">
-                            Late
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 mt-2 sm:mt-0 sm:gap-4">
+                          <span className="px-2 py-1 bg-gray-100 dark:bg-gray-600 rounded-full text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                            {bill.frequency}
                           </span>
-                        )}
+                          {bill.budgetCategory && (
+                            <span className="px-2 py-1 bg-blue-100 dark:bg-blue-600 rounded-full text-xs text-blue-700 dark:text-blue-300 whitespace-nowrap">
+                              {bill.budgetCategory.title}
+                            </span>
+                          )}
+                          {bill.isPaid && (
+                            <span className="px-2 py-1 bg-green-100 dark:bg-green-600 rounded-full text-xs text-green-700 dark:text-green-300 whitespace-nowrap">
+                              Paid
+                            </span>
+                          )}
+                          {!bill.isPaid && isBillLate(bill) && (
+                            <span className="px-2 py-1 bg-red-100 dark:bg-red-600 rounded-full text-xs text-red-700 dark:text-red-300 whitespace-nowrap">
+                              Late
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center justify-end sm:justify-start space-x-2 flex-shrink-0">
                       {bill.budgetCategoryId && !bill.isPaid && (
                         <button
                           onClick={() => handlePayBill(bill)}
