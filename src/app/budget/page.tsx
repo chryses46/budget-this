@@ -161,14 +161,11 @@ export default function BudgetPage() {
         })
         
         if (response.ok) {
-          const updatedExpenditure = await response.json()
-          setCategories(categories.map(cat => ({
-            ...cat,
-            expenditures: cat.expenditures.map(exp => 
-              exp.id === editingExpenditure.id ? updatedExpenditure : exp
-            )
-          })))
+          // Refresh categories to get updated account balances
+          await fetchCategories()
         } else {
+          const error = await response.json()
+          alert(error.error || 'Failed to update expenditure')
         }
       } else {
         // Create new expenditure
@@ -179,13 +176,11 @@ export default function BudgetPage() {
         })
         
         if (response.ok) {
-          const newExpenditure = await response.json()
-          setCategories(categories.map(cat => 
-            cat.id === data.categoryId 
-              ? { ...cat, expenditures: [...cat.expenditures, newExpenditure] }
-              : cat
-          ))
+          // Refresh categories to get updated account balances
+          await fetchCategories()
         } else {
+          const error = await response.json()
+          alert(error.error || 'Failed to create expenditure')
         }
       }
       
@@ -193,6 +188,8 @@ export default function BudgetPage() {
       setShowExpenditureForm(false)
       setEditingExpenditure(null)
     } catch (error) {
+      console.error('Error saving expenditure:', error)
+      alert('Failed to save expenditure')
     }
   }
 
@@ -295,21 +292,15 @@ export default function BudgetPage() {
       })
       
       if (response.ok) {
-        // Update the bill in the local state
-        setCategories(categories.map(cat => ({
-          ...cat,
-          bills: cat.bills.map(b => 
-            b.id === bill.id 
-              ? { ...b, isPaid: true, paidAt: new Date().toISOString() }
-              : b
-          )
-        })))
+        // Refresh categories to get updated account balances
+        await fetchCategories()
         alert('Bill marked as paid!')
       } else {
         const error = await response.json()
         alert(error.error || 'Failed to pay bill')
       }
     } catch (error) {
+      console.error('Error paying bill:', error)
       alert('Failed to pay bill')
     }
   }

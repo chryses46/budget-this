@@ -20,11 +20,31 @@ export async function PUT(
 
     const { id } = await params
     const body = await request.json()
-    const { title, limit } = updateBudgetCategorySchema.parse(body)
+    const { title, limit, accountId } = updateBudgetCategorySchema.parse(body)
 
     const category = await prisma.budgetCategory.update({
       where: { id, userId },
-      data: { title, limit }
+      data: { 
+        title, 
+        limit, 
+        accountId: accountId === '' ? null : accountId 
+      },
+      include: {
+        expenditures: {
+          orderBy: { createdAt: 'desc' }
+        },
+        bills: {
+          orderBy: { createdAt: 'desc' }
+        },
+        account: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            balance: true
+          }
+        }
+      }
     })
 
     return NextResponse.json(category)
