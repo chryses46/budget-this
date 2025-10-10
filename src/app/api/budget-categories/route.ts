@@ -63,8 +63,24 @@ export async function POST(request: NextRequest) {
       data: {
         title,
         limit,
-        accountId,
+        accountId: accountId === '' ? null : accountId,
         userId
+      },
+      include: {
+        expenditures: {
+          orderBy: { createdAt: 'desc' }
+        },
+        bills: {
+          orderBy: { createdAt: 'desc' }
+        },
+        account: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            balance: true
+          }
+        }
       }
     })
 

@@ -48,16 +48,52 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { title, amount, categoryId } = expenditureSchema.parse(body)
 
-    const expenditure = await prisma.expenditure.create({
-      data: {
-        title,
-        amount,
-        categoryId,
-        userId
-      }
+    // Check if the budget category has a linked account
+    const budgetCategory = await prisma.budgetCategory.findUnique({
+      where: { id: categoryId },
+      select: { accountId: true }
     })
 
-    return NextResponse.json(expenditure)
+    // Use transaction to ensure both expenditure and account transaction are created together
+    const result = await prisma.$transaction(async (tx) => {
+      // Create the expenditure
+      const expenditure = await tx.expenditure.create({
+        data: {
+          title,
+          amount,
+          categoryId,
+          userId
+        }
+      })
+
+      // If the budget category is linked to an account, create a withdrawal transaction
+      if (budgetCategory?.accountId) {
+        // Create account transaction
+        await tx.accountTransaction.create({
+          data: {
+            accountId: budgetCategory.accountId,
+            type: 'withdrawal',
+            amount,
+            description: `Expenditure: ${title}`,
+            userId
+          }
+        })
+
+        // Update account balance
+        await tx.account.update({
+          where: { id: budgetCategory.accountId },
+          data: {
+            balance: {
+              decrement: amount
+            }
+          }
+        })
+      }
+
+      return expenditure
+    })
+
+    return NextResponse.json(result)
   } catch (error) {
     return NextResponse.json(
       { error: 'Failed to create expenditure' },
