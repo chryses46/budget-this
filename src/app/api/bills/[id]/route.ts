@@ -1,30 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { updateBillSchema } from '@/lib/validations'
 import { prisma } from '@/lib/prisma'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { requireApiAuth } from '@/lib/api-auth'
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
-    }
-    const userId = session.user.id
+    const auth = await requireApiAuth(request)
+    if (auth instanceof NextResponse) return auth
+    const { userId } = auth
 
     const { id } = await params
     const body = await request.json()
-    const { title, amount, dayDue, frequency, budgetCategoryId } = updateBillSchema.parse(body)
+    const parsed = updateBillSchema.parse(body)
 
     const bill = await prisma.bill.update({
       where: { id, userId },
-      data: { title, amount, dayDue, frequency, budgetCategoryId }
+      data: {
+        ...(parsed.title !== undefined && { title: parsed.title }),
+        ...(parsed.amount !== undefined && { amount: parsed.amount }),
+        ...(parsed.dayDue !== undefined && { dayDue: parsed.dayDue }),
+        ...(parsed.frequency !== undefined && { frequency: parsed.frequency }),
+        ...(parsed.budgetCategoryId !== undefined && { budgetCategoryId: parsed.budgetCategoryId }),
+        ...(parsed.isAutopay !== undefined && { isAutopay: parsed.isAutopay }),
+      }
     })
 
     return NextResponse.json(bill)
@@ -41,14 +42,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
-    }
-    const userId = session.user.id
+    const auth = await requireApiAuth(request)
+    if (auth instanceof NextResponse) return auth
+    const { userId } = auth
 
     const { id } = await params
 

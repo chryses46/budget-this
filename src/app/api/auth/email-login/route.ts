@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
+import { hashForLookup } from '@/lib/field-encryption'
 import { generateMfaCode, sendMfaCode } from '@/lib/auth'
 
 const emailLoginSchema = z.object({
@@ -12,9 +13,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { email } = emailLoginSchema.parse(body)
 
-    // Find user
-    const user = await prisma.user.findUnique({
-      where: { email }
+    // Find user by email hash
+    const user = await prisma.user.findFirst({
+      where: { emailHash: hashForLookup(email) }
     })
 
     if (!user) {
@@ -35,12 +36,12 @@ export async function POST(request: NextRequest) {
     // Generate MFA code
     const mfaCode = generateMfaCode()
     
-    // Store MFA code in database with 5-minute expiration
+    // Store MFA code hash in database with 5-minute expiration; code sent by email, not stored in plain
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes from now
     
     await prisma.mfaCode.create({
       data: {
-        code: mfaCode,
+        codeHash: hashForLookup(mfaCode),
         userId: user.id,
         expiresAt: expiresAt
       }

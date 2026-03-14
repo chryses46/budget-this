@@ -1,24 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { budgetCategorySchema } from '@/lib/validations'
 import { prisma } from '@/lib/prisma'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { requireApiAuth } from '@/lib/api-auth'
+
+function getCurrentMonthUtcRange() {
+  const now = new Date()
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0))
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999))
+  return { start, end }
+}
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
-    }
-    const userId = session.user.id
-    
+    const auth = await requireApiAuth(request)
+    if (auth instanceof NextResponse) return auth
+    const { userId } = auth
+    const currentMonthOnly = request.nextUrl.searchParams.get('currentMonthOnly') === 'true'
+    const { start: monthStart, end: monthEnd } = getCurrentMonthUtcRange()
+
     const categories = await prisma.budgetCategory.findMany({
       where: { userId },
       include: {
         expenditures: {
+          ...(currentMonthOnly
+            ? {
+                where: {
+                  createdAt: { gte: monthStart, lte: monthEnd }
+                }
+              }
+            : {}),
           orderBy: { createdAt: 'desc' }
         },
         bills: {
@@ -47,23 +57,17 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
-    }
-    const userId = session.user.id
+    const auth = await requireApiAuth(request)
+    if (auth instanceof NextResponse) return auth
+    const { userId } = auth
 
     const body = await request.json()
-    const { title, limit, accountId } = budgetCategorySchema.parse(body)
+    const { title, limit } = budgetCategorySchema.parse(body)
 
     const category = await prisma.budgetCategory.create({
       data: {
         title,
         limit,
-        accountId: accountId === '' ? null : accountId,
         userId
       },
       include: {

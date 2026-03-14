@@ -28,15 +28,15 @@ export const billSchema = z.object({
   dayDue: z.number().min(1).max(31, 'Day due must be between 1 and 31'),
   frequency: z.enum(['Weekly', 'Monthly', 'Yearly']),
   budgetCategoryId: z.string().optional(),
+  isAutopay: z.boolean().optional().default(false),
 })
 
 export const updateBillSchema = billSchema.partial()
 
-// Budget Category schemas
+// Budget Category schemas (accountId no longer accepted; DB column kept for backwards compatibility)
 export const budgetCategorySchema = z.object({
   title: z.string().min(1, 'Title is required'),
   limit: z.number().positive('Limit must be positive'),
-  accountId: z.string().optional(),
 })
 
 export const updateBudgetCategorySchema = budgetCategorySchema.partial()
@@ -46,6 +46,11 @@ export const expenditureSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   amount: z.number().positive('Amount must be positive'),
   categoryId: z.string().min(1, 'Category is required'),
+  accountId: z
+    .union([z.string().uuid(), z.literal(''), z.null()])
+    .optional()
+    .transform((v) => (v === '' ? undefined : v)),
+  createdAt: z.string().optional(), // ISO date string for form/API; stored as Date in DB
 })
 
 export const updateExpenditureSchema = expenditureSchema.partial()

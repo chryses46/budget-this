@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useUser } from '@/contexts/UserContext'
-import { Menu, X, DollarSign, Calendar, PieChart, CreditCard, LogOut } from 'lucide-react'
+import { Menu, X, DollarSign, Calendar, PieChart, CreditCard, Receipt, LogOut } from 'lucide-react'
 
 interface NavigationProps {
   currentPage?: string
@@ -17,6 +17,7 @@ export function Navigation({ currentPage }: NavigationProps) {
     { name: 'Dashboard', href: '/dashboard', icon: DollarSign },
     { name: 'Bills', href: '/bills', icon: Calendar },
     { name: 'Budget', href: '/budget', icon: PieChart },
+    { name: 'Expenditures', href: '/expenditures', icon: Receipt },
     { name: 'Accounts', href: '/accounts', icon: CreditCard },
   ]
 
@@ -93,6 +94,7 @@ export function Navigation({ currentPage }: NavigationProps) {
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
+              aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
             >
               {isMenuOpen ? (
                 <X className="h-6 w-6" />

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { hashForLookup } from '@/lib/field-encryption'
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,11 +34,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Find valid MFA code in database
+    const codeHash = hashForLookup(mfaCode)
+
+    // Find valid MFA code in database (codes stored as hash only)
     const validMfaCode = await prisma.mfaCode.findFirst({
       where: {
         userId: userId,
-        code: mfaCode,
+        codeHash: codeHash,
         used: false,
         expiresAt: {
           gt: new Date() // Not expired

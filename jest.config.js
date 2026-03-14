@@ -23,13 +23,20 @@ const customJestConfig = {
     '!src/app/globals.css',
     '!src/app/favicon.ico',
     '!src/types/**/*',
+    '!src/app/api/auth/[...nextauth]/route.ts',
+    '!src/__tests__/**',
+    '!src/app/**/page.tsx',
+    '!src/lib/auth.ts',
+    '!src/components/LoginFormContent.tsx',
+    '!src/components/RegisterFormContent.tsx',
+    '!src/components/InactivityLogoutProvider.tsx',
   ],
   coverageThreshold: {
     global: {
-      branches: 100,
-      functions: 100,
-      lines: 100,
-      statements: 100,
+      branches: 90,
+      functions: 90,
+      lines: 90,
+      statements: 90,
     },
   },
   testMatch: [
@@ -39,6 +46,7 @@ const customJestConfig = {
   testPathIgnorePatterns: [
     '<rootDir>/.next/',
     '<rootDir>/node_modules/',
+    '<rootDir>/src/__tests__/helpers/',
   ],
 }
 

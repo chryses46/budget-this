@@ -4,8 +4,16 @@ import { prisma } from '@/lib/prisma'
 import { hashPassword, generateMfaCode, sendVerificationEmail } from '@/lib/auth'
 
 // Mock dependencies
-jest.mock('@/lib/prisma')
+jest.mock('@/lib/prisma', () => ({
+  prisma: {
+    user: { findFirst: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+    mfaCode: { create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
+  },
+}))
 jest.mock('@/lib/auth')
+jest.mock('@/lib/field-encryption', () => ({
+  hashForLookup: jest.fn((s: string) => 'hash-' + s),
+}))
 
 const mockPrisma = prisma as jest.Mocked<typeof prisma>
 const mockHashPassword = hashPassword as jest.MockedFunction<typeof hashPassword>
@@ -44,7 +52,7 @@ describe('/api/auth/register', () => {
       expiresAt: new Date(),
     }
 
-    mockPrisma.user.findUnique.mockResolvedValue(null)
+    mockPrisma.user.findFirst.mockResolvedValue(null)
     mockHashPassword.mockResolvedValue('hashed-password')
     mockPrisma.user.create.mockResolvedValue(mockUser as any)
     mockGenerateMfaCode.mockReturnValue('123456')
@@ -60,12 +68,13 @@ describe('/api/auth/register', () => {
       userId: 'user-123',
     })
 
-    expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
-      where: { email: 'john@example.com' },
+    expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
+      where: { emailHash: 'hash-john@example.com' },
     })
     expect(mockHashPassword).toHaveBeenCalledWith('password123')
     expect(mockPrisma.user.create).toHaveBeenCalledWith({
       data: {
+        emailHash: 'hash-john@example.com',
         firstName: 'John',
         lastName: 'Doe',
         email: 'john@example.com',
@@ -77,7 +86,7 @@ describe('/api/auth/register', () => {
     expect(mockGenerateMfaCode).toHaveBeenCalled()
     expect(mockPrisma.mfaCode.create).toHaveBeenCalledWith({
       data: {
-        code: '123456',
+        codeHash: 'hash-123456',
         userId: 'user-123',
         expiresAt: expect.any(Date),
       },
@@ -102,7 +111,7 @@ describe('/api/auth/register', () => {
       email: 'existing@example.com',
     }
 
-    mockPrisma.user.findUnique.mockResolvedValue(existingUser as any)
+    mockPrisma.user.findFirst.mockResolvedValue(existingUser as any)
 
     const response = await POST(mockRequest)
     const responseData = await response.json()
@@ -148,7 +157,7 @@ describe('/api/auth/register', () => {
       json: jest.fn().mockResolvedValue(requestBody),
     } as unknown as NextRequest
 
-    mockPrisma.user.findUnique.mockRejectedValue(new Error('Database error'))
+    mockPrisma.user.findFirst.mockRejectedValue(new Error('Database error'))
 
     const response = await POST(mockRequest)
     const responseData = await response.json()
@@ -186,7 +195,7 @@ describe('/api/auth/register', () => {
       expiresAt: new Date(),
     }
 
-    mockPrisma.user.findUnique.mockResolvedValue(null)
+    mockPrisma.user.findFirst.mockResolvedValue(null)
     mockHashPassword.mockResolvedValue('hashed-password')
     mockPrisma.user.create.mockResolvedValue(mockUser as any)
     mockGenerateMfaCode.mockReturnValue('123456')
@@ -229,7 +238,7 @@ describe('/api/auth/register', () => {
       expiresAt: new Date(),
     }
 
-    mockPrisma.user.findUnique.mockResolvedValue(null)
+    mockPrisma.user.findFirst.mockResolvedValue(null)
     mockHashPassword.mockResolvedValue('hashed-password')
     mockPrisma.user.create.mockResolvedValue(mockUser as any)
     mockGenerateMfaCode.mockReturnValue('123456')

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { hashForLookup } from '@/lib/field-encryption'
 import { verifyPassword } from '@/lib/auth-utils'
 
 export async function POST(request: NextRequest) {
@@ -13,9 +14,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Find user
-    const user = await prisma.user.findUnique({
-      where: { email }
+    // Find user by email hash
+    const user = await prisma.user.findFirst({
+      where: { emailHash: hashForLookup(email) }
     })
 
     if (!user) {
@@ -42,10 +43,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Return validation result with MFA status
+    // In development, bypass MFA so password-only login is allowed
+    const isDev = process.env.NODE_ENV === 'development'
     return NextResponse.json({
       valid: true,
-      mfaEnabled: user.mfaEnabled,
+      mfaEnabled: isDev ? false : user.mfaEnabled,
       userId: user.id
     })
 

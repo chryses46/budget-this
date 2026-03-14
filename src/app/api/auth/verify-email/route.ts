@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { hashForLookup } from '@/lib/field-encryption'
 
 const verifyEmailSchema = z.object({
   code: z.string().min(6).max(6),
@@ -33,11 +34,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Find the verification code
+    const codeHash = hashForLookup(code)
+
+    // Find the verification code by hash (codes stored as hash only)
     const mfaCode = await prisma.mfaCode.findFirst({
       where: {
         userId: userId,
-        code: code,
+        codeHash: codeHash,
         used: false,
         expiresAt: {
           gt: new Date()

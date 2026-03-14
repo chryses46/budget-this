@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
-import { budgetCategorySchema, expenditureSchema, BudgetCategoryInput, ExpenditureInput } from '@/lib/validations'
+import { budgetCategorySchema, BudgetCategoryInput } from '@/lib/validations'
 import { cn } from '@/lib/utils'
 import { Plus, Edit, Trash2, DollarSign, PieChart } from 'lucide-react'
 import { Navigation } from '@/components/Navigation'
@@ -19,6 +19,7 @@ interface Bill {
   budgetCategoryId?: string
   isPaid: boolean
   paidAt?: string
+  isAutopay?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -27,13 +28,6 @@ interface BudgetCategory {
   id: string
   title: string
   limit: number
-  accountId?: string
-  account?: {
-    id: string
-    name: string
-    type: string
-    balance: number
-  }
   createdAt: string
   updatedAt: string
   expenditures: Expenditure[]
@@ -49,41 +43,26 @@ interface Expenditure {
   updatedAt: string
 }
 
-interface Account {
-  id: string
-  name: string
-  type: string
-  balance: number
-}
-
 export default function BudgetPage() {
   const { user, isLoading: userLoading } = useUser()
   const [categories, setCategories] = useState<BudgetCategory[]>([])
-  const [accounts, setAccounts] = useState<Account[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showCategoryForm, setShowCategoryForm] = useState(false)
-  const [showExpenditureForm, setShowExpenditureForm] = useState(false)
   const [editingCategory, setEditingCategory] = useState<BudgetCategory | null>(null)
-  const [editingExpenditure, setEditingExpenditure] = useState<Expenditure | null>(null)
 
   const categoryForm = useForm<BudgetCategoryInput>({
     resolver: zodResolver(budgetCategorySchema),
   })
 
-  const expenditureForm = useForm<ExpenditureInput>({
-    resolver: zodResolver(expenditureSchema),
-  })
-
   useEffect(() => {
     if (user && !userLoading) {
       fetchCategories()
-      fetchAccounts()
     }
   }, [user, userLoading])
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('/api/budget-categories')
+      const response = await fetch('/api/budget-categories?currentMonthOnly=true')
       if (response.ok) {
         const data = await response.json()
         setCategories(data)
@@ -94,20 +73,6 @@ export default function BudgetPage() {
       setCategories([])
     } finally {
       setIsLoading(false)
-    }
-  }
-
-  const fetchAccounts = async () => {
-    try {
-      const response = await fetch('/api/accounts')
-      if (response.ok) {
-        const data = await response.json()
-        setAccounts(data)
-      } else {
-        setAccounts([])
-      }
-    } catch (error) {
-      setAccounts([])
     }
   }
 
@@ -122,10 +87,7 @@ export default function BudgetPage() {
         })
         
         if (response.ok) {
-          const updatedCategory = await response.json()
-          setCategories(categories.map(cat => 
-            cat.id === editingCategory.id ? updatedCategory : cat
-          ))
+          await fetchCategories()
         } else {
         }
       } else {
@@ -150,61 +112,10 @@ export default function BudgetPage() {
     }
   }
 
-  const onExpenditureSubmit = async (data: ExpenditureInput) => {
-    try {
-      if (editingExpenditure) {
-        // Update existing expenditure
-        const response = await fetch(`/api/expenditures/${editingExpenditure.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-        })
-        
-        if (response.ok) {
-          // Refresh categories to get updated account balances
-          await fetchCategories()
-        } else {
-          const error = await response.json()
-          alert(error.error || 'Failed to update expenditure')
-        }
-      } else {
-        // Create new expenditure
-        const response = await fetch('/api/expenditures', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-        })
-        
-        if (response.ok) {
-          // Refresh categories to get updated account balances
-          await fetchCategories()
-        } else {
-          const error = await response.json()
-          alert(error.error || 'Failed to create expenditure')
-        }
-      }
-      
-      expenditureForm.reset()
-      setShowExpenditureForm(false)
-      setEditingExpenditure(null)
-    } catch (error) {
-      console.error('Error saving expenditure:', error)
-      alert('Failed to save expenditure')
-    }
-  }
-
   const handleEditCategory = (category: BudgetCategory) => {
     setEditingCategory(category)
-    categoryForm.reset(category)
+    categoryForm.reset({ title: category.title, limit: category.limit })
     setShowCategoryForm(true)
-    // Scroll to top of the page to show the edit form
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  const handleEditExpenditure = (expenditure: Expenditure) => {
-    setEditingExpenditure(expenditure)
-    expenditureForm.reset(expenditure)
-    setShowExpenditureForm(true)
     // Scroll to top of the page to show the edit form
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -223,27 +134,46 @@ export default function BudgetPage() {
     }
   }
 
-  const handleDeleteExpenditure = async (categoryId: string, expenditureId: string) => {
-    if (!confirm('Are you sure you want to delete this expenditure?')) return
-    
-    try {
-      const response = await fetch(`/api/expenditures/${expenditureId}`, { method: 'DELETE' })
-      
-      if (response.ok) {
-        setCategories(categories.map(cat => 
-          cat.id === categoryId 
-            ? { ...cat, expenditures: cat.expenditures.filter(exp => exp.id !== expenditureId) }
-            : cat
-        ))
-      } else {
-      }
-    } catch (error) {
+  /** True if bill is autopay and we're at or past the due date for the current period (show as paid in UI). */
+  const isAutopayDue = (bill: Bill) => {
+    if (!bill.isAutopay) return false
+    const today = new Date()
+    const currentDay = today.getDate()
+    if (bill.frequency === 'Monthly') {
+      return currentDay >= bill.dayDue
     }
+    if (bill.frequency === 'Weekly') {
+      const billDate = new Date(bill.createdAt)
+      const daysDiff = Math.floor((today.getTime() - billDate.getTime()) / (1000 * 60 * 60 * 24))
+      return daysDiff >= 7
+    }
+    if (bill.frequency === 'Yearly') {
+      const billDate = new Date(bill.createdAt)
+      const daysDiff = Math.floor((today.getTime() - billDate.getTime()) / (1000 * 60 * 60 * 24))
+      return daysDiff >= 365
+    }
+    return false
   }
+
+  /** True if bill was manually paid in the current period (month/year); past periods do not count as paid. */
+  const isPaidThisPeriod = (bill: Bill) => {
+    if (!bill.isPaid || !bill.paidAt) return false
+    const today = new Date()
+    const paidAt = new Date(bill.paidAt)
+    if (bill.frequency === 'Monthly' || bill.frequency === 'Weekly') {
+      return paidAt.getMonth() === today.getMonth() && paidAt.getFullYear() === today.getFullYear()
+    }
+    if (bill.frequency === 'Yearly') {
+      return paidAt.getFullYear() === today.getFullYear()
+    }
+    return false
+  }
+
+  const displayAsPaid = (bill: Bill) => isPaidThisPeriod(bill) || isAutopayDue(bill)
 
   const getTotalSpent = (category: BudgetCategory) => {
     const expenditureTotal = (category.expenditures || []).reduce((sum, exp) => sum + exp.amount, 0)
-    const paidBillTotal = (category.bills || []).filter(bill => bill.isPaid).reduce((sum, bill) => sum + bill.amount, 0)
+    const paidBillTotal = (category.bills || []).filter(bill => displayAsPaid(bill)).reduce((sum, bill) => sum + bill.amount, 0)
     return expenditureTotal + paidBillTotal
   }
 
@@ -252,8 +182,8 @@ export default function BudgetPage() {
   }
 
   const isBillLate = (bill: Bill) => {
-    if (bill.isPaid) return false
-    
+    if (displayAsPaid(bill)) return false
+
     const today = new Date()
     const currentDay = today.getDate()
     const currentMonth = today.getMonth()
@@ -279,30 +209,6 @@ export default function BudgetPage() {
     }
     
     return false
-  }
-
-  const handlePayBill = async (bill: Bill) => {
-    if (!confirm(`Are you sure you want to mark "${bill.title}" as paid for $${bill.amount.toFixed(2)}?`)) {
-      return
-    }
-
-    try {
-      const response = await fetch(`/api/bills/${bill.id}/pay`, {
-        method: 'POST'
-      })
-      
-      if (response.ok) {
-        // Refresh categories to get updated account balances
-        await fetchCategories()
-        alert('Bill marked as paid!')
-      } else {
-        const error = await response.json()
-        alert(error.error || 'Failed to pay bill')
-      }
-    } catch (error) {
-      console.error('Error paying bill:', error)
-      alert('Failed to pay bill')
-    }
   }
 
   if (userLoading || isLoading) {
@@ -340,11 +246,9 @@ export default function BudgetPage() {
         {/* Page Header with Add Buttons */}
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Budget</h1>
-          <div className="flex space-x-2">
-            <button
+          <button
               onClick={() => {
                 setShowCategoryForm(true)
-                // Scroll to top to show the form
                 window.scrollTo({ top: 0, behavior: 'smooth' })
               }}
               className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center"
@@ -352,22 +256,7 @@ export default function BudgetPage() {
               <Plus className="h-4 w-4 mr-2" />
               Add Category
             </button>
-            {categories.length > 0 && (
-              <button
-                onClick={() => {
-                  setShowExpenditureForm(true)
-                  // Scroll to top to show the form
-                  window.scrollTo({ top: 0, behavior: 'smooth' })
-                }}
-                className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Expenditure
-              </button>
-            )}
-          </div>
         </div>
-
         {/* Category Form */}
         {showCategoryForm && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
@@ -415,29 +304,6 @@ export default function BudgetPage() {
                     <p className="mt-1 text-sm text-red-600 dark:text-red-400">{categoryForm.formState.errors.limit.message}</p>
                   )}
                 </div>
-
-                <div>
-                  <label htmlFor="accountId" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Linked Account (Optional)
-                  </label>
-                  <select
-                    {...categoryForm.register('accountId')}
-                    className={cn(
-                      'mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
-                      categoryForm.formState.errors.accountId ? 'border-red-300 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
-                    )}
-                  >
-                    <option value="">No Account Linked</option>
-                    {accounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name} ({account.type}) - ${account.balance.toFixed(2)}
-                      </option>
-                    ))}
-                  </select>
-                  {categoryForm.formState.errors.accountId && (
-                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{categoryForm.formState.errors.accountId.message}</p>
-                  )}
-                </div>
               </div>
 
               <div className="flex justify-end space-x-3">
@@ -457,101 +323,6 @@ export default function BudgetPage() {
                   className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
                 >
                   {editingCategory ? 'Update Category' : 'Add Category'}
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* Expenditure Form */}
-        {showExpenditureForm && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
-            <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-              {editingExpenditure ? 'Edit Expenditure' : 'Add New Expenditure'}
-            </h2>
-            <form onSubmit={expenditureForm.handleSubmit(onExpenditureSubmit)} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Description
-                  </label>
-                  <input
-                    {...expenditureForm.register('title')}
-                    type="text"
-                    className={cn(
-                      'mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
-                      expenditureForm.formState.errors.title ? 'border-red-300 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
-                    )}
-                  />
-                  {expenditureForm.formState.errors.title && (
-                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{expenditureForm.formState.errors.title.message}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Amount
-                  </label>
-                  <div className="mt-1 relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <DollarSign className="h-5 w-5 text-gray-400 dark:text-gray-500" />
-                    </div>
-                    <input
-                      {...expenditureForm.register('amount', { valueAsNumber: true })}
-                      type="number"
-                      step="0.01"
-                      className={cn(
-                        'block w-full pl-10 pr-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
-                        expenditureForm.formState.errors.amount ? 'border-red-300 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
-                      )}
-                    />
-                  </div>
-                  {expenditureForm.formState.errors.amount && (
-                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{expenditureForm.formState.errors.amount.message}</p>
-                  )}
-                </div>
-
-                <div className="md:col-span-2">
-                  <label htmlFor="categoryId" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Category
-                  </label>
-                  <select
-                    {...expenditureForm.register('categoryId')}
-                    className={cn(
-                      'mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
-                      expenditureForm.formState.errors.categoryId ? 'border-red-300 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
-                    )}
-                  >
-                    <option value="">Select a category</option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.title}
-                      </option>
-                    ))}
-                  </select>
-                  {expenditureForm.formState.errors.categoryId && (
-                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{expenditureForm.formState.errors.categoryId.message}</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    expenditureForm.reset()
-                    setShowExpenditureForm(false)
-                    setEditingExpenditure(null)
-                  }}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                >
-                  {editingExpenditure ? 'Update Expenditure' : 'Add Expenditure'}
                 </button>
               </div>
             </form>
@@ -596,11 +367,6 @@ export default function BudgetPage() {
                               ({category.expenditures?.length || 0} expenditures, {category.bills?.length || 0} bills)
                             </span>
                           )}
-                          {category.account && (
-                            <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">
-                              • Linked to {category.account.name}
-                            </span>
-                          )}
                         </p>
                       </div>
                       <div className="flex items-center space-x-2">
@@ -641,26 +407,21 @@ export default function BudgetPage() {
                       </div>
                     </div>
 
-                    {/* Expenditures */}
+                    {/* Expenditures (current month only) */}
                     <div>
                       <div className="flex items-center justify-between mb-3">
                         <h4 className="text-md font-medium text-gray-900 dark:text-white">Expenditures</h4>
-                        <button
-                          onClick={() => {
-                            expenditureForm.setValue('categoryId', category.id)
-                            setShowExpenditureForm(true)
-                            // Scroll to top to show the form
-                            window.scrollTo({ top: 0, behavior: 'smooth' })
-                          }}
+                        <Link
+                          href="/expenditures"
                           className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 text-sm flex items-center"
                         >
                           <Plus className="h-4 w-4 mr-1" />
                           Add Expenditure
-                        </button>
+                        </Link>
                       </div>
 
                       {(category.expenditures || []).length === 0 ? (
-                        <p className="text-gray-500 dark:text-gray-400 text-sm">No expenditures yet</p>
+                        <p className="text-gray-500 dark:text-gray-400 text-sm">No expenditures this month</p>
                       ) : (
                         <div className="space-y-2">
                           {(category.expenditures || []).map((expenditure) => (
@@ -671,21 +432,7 @@ export default function BudgetPage() {
                                   {new Date(expenditure.createdAt).toLocaleDateString()}
                                 </p>
                               </div>
-                              <div className="flex items-center space-x-2">
-                                <span className="font-medium text-gray-900 dark:text-white">${expenditure.amount.toFixed(2)}</span>
-                                <button
-                                  onClick={() => handleEditExpenditure(expenditure)}
-                                  className="p-1 text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400"
-                                >
-                                  <Edit className="h-3 w-3" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteExpenditure(category.id, expenditure.id)}
-                                  className="p-1 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </button>
-                              </div>
+                              <span className="font-medium text-gray-900 dark:text-white">${expenditure.amount.toFixed(2)}</span>
                             </div>
                           ))}
                         </div>
@@ -703,28 +450,33 @@ export default function BudgetPage() {
                       ) : (
                         <div className="space-y-2">
                           {(category.bills || []).map((bill) => {
-                            const isLate = isBillLate(bill)
-                            const isPaid = bill.isPaid
-                            
+                            const isLate = !bill.isPaid && isBillLate(bill)
+                            const paid = displayAsPaid(bill)
+
                             return (
                               <div key={bill.id} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700">
                                 <div>
-                                  <div className="flex items-center space-x-2">
+                                  <div className="flex items-center space-x-2 flex-wrap gap-1">
                                     <span className="text-gray-900 dark:text-white">{bill.title}</span>
-                                    {isPaid && (
+                                    {paid && (
                                       <span className="px-2 py-1 bg-green-100 dark:bg-green-600 rounded-full text-xs text-green-700 dark:text-green-300">
                                         Paid
                                       </span>
                                     )}
-                                    {isLate && !isPaid && (
+                                    {isLate && (
                                       <span className="px-2 py-1 bg-red-100 dark:bg-red-600 rounded-full text-xs text-red-700 dark:text-red-300">
                                         Late
+                                      </span>
+                                    )}
+                                    {bill.isAutopay && (
+                                      <span className="px-2 py-1 bg-yellow-100 dark:bg-yellow-600 rounded-full text-xs text-yellow-700 dark:text-yellow-300">
+                                        Autopay
                                       </span>
                                     )}
                                   </div>
                                   <p className="text-sm text-gray-500 dark:text-gray-400">
                                     Due on {bill.dayDue} • {bill.frequency}
-                                    {isPaid && bill.paidAt && (
+                                    {isPaidThisPeriod(bill) && bill.paidAt && (
                                       <span className="ml-2">
                                         • Paid on {new Date(bill.paidAt).toLocaleDateString()}
                                       </span>
@@ -733,14 +485,6 @@ export default function BudgetPage() {
                                 </div>
                                 <div className="flex items-center space-x-2">
                                   <span className="font-medium text-gray-900 dark:text-white">${bill.amount.toFixed(2)}</span>
-                                  {!isPaid && (
-                                    <button
-                                      onClick={() => handlePayBill(bill)}
-                                      className="px-3 py-1 bg-green-600 text-white text-xs rounded-md hover:bg-green-700"
-                                    >
-                                      Pay
-                                    </button>
-                                  )}
                                   <span className="px-2 py-1 bg-blue-100 dark:bg-blue-600 rounded-full text-xs text-blue-700 dark:text-blue-300">
                                     Bill
                                   </span>

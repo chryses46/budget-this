@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { registerSchema } from '@/lib/validations'
 import { prisma } from '@/lib/prisma'
+import { hashForLookup } from '@/lib/field-encryption'
 import { hashPassword, generateMfaCode, sendVerificationEmail } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
@@ -8,9 +9,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { firstName, lastName, email, password } = registerSchema.parse(body)
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email }
+    const emailHash = hashForLookup(email)
+
+    // Check if user already exists (by email hash)
+    const existingUser = await prisma.user.findFirst({
+      where: { emailHash }
     })
 
     if (existingUser) {
@@ -23,9 +26,10 @@ export async function POST(request: NextRequest) {
     // Hash password
     const hashedPassword = await hashPassword(password)
 
-    // Create user
+    // Create user (emailHash for lookup; firstName, lastName, email encrypted by middleware)
     const user = await prisma.user.create({
       data: {
+        emailHash,
         firstName,
         lastName,
         email,
@@ -38,13 +42,13 @@ export async function POST(request: NextRequest) {
     // Generate verification code
     const verificationCode = await generateMfaCode()
     
-    // Store verification code in database with expiration (24 hours)
+    // Store code hash in database with expiration (24 hours); code sent by email, not stored in plain
     const expiresAt = new Date()
     expiresAt.setHours(expiresAt.getHours() + 24)
     
     await prisma.mfaCode.create({
       data: {
-        code: verificationCode,
+        codeHash: hashForLookup(verificationCode),
         userId: user.id,
         expiresAt: expiresAt
       }
