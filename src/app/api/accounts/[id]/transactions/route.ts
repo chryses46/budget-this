@@ -65,7 +65,7 @@ export async function POST(
     }
 
     // Create transaction and update account balance in a transaction
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: typeof prisma) => {
       // Create the account transaction
       const transaction = await tx.accountTransaction.create({
         data: {

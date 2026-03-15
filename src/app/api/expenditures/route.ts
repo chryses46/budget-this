@@ -4,6 +4,13 @@ import { prisma } from '@/lib/prisma'
 import { decryptQueryResult } from '@/lib/prisma-encryption-middleware'
 import { requireApiAuth } from '@/lib/api-auth'
 
+type ExpenditureWhere = {
+  userId: string
+  title?: { contains: string }
+  categoryId?: string
+  createdAt?: { gte?: Date; lte?: Date }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireApiAuth(request)
@@ -18,7 +25,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20', 10)))
     const skip = (page - 1) * limit
 
-    const where: Parameters<typeof prisma.expenditure.findMany>[0]['where'] = { userId }
+    const where: ExpenditureWhere = { userId }
     if (title) {
       where.title = { contains: title }
     }
@@ -103,7 +110,7 @@ export async function POST(request: NextRequest) {
       effectiveAccount = primary
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: typeof prisma) => {
       const expenditure = await tx.expenditure.create({
         data: {
           title,
