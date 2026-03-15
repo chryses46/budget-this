@@ -1,5 +1,43 @@
 import '@testing-library/jest-dom'
 
+// Polyfill for Next.js API routes in Jest (next/server expects Request)
+if (typeof globalThis.Request === 'undefined') {
+  globalThis.Request = class Request {
+    constructor(input, init = {}) {
+      this.url = typeof input === 'string' ? input : input?.url ?? ''
+      this.method = (init.method || 'GET').toUpperCase()
+      this.headers = new Map(Object.entries(init.headers || {}))
+    }
+  }
+}
+if (typeof globalThis.Response === 'undefined') {
+  globalThis.Response = class Response {}
+}
+
+// Mock next/server so NextResponse.json() returns an object with .json() that resolves to body.
+// Use a class so "auth instanceof NextResponse" works in routes.
+jest.mock('next/server', () => {
+  class NextResponse {
+    constructor(status, body) {
+      this.status = status
+      this._body = body
+      this.cookies = { set: jest.fn() }
+      this.headers = new Map()
+    }
+    json() {
+      return Promise.resolve(this._body)
+    }
+    static json(body, init) {
+      const status = (init && init.status) ?? 200
+      return new NextResponse(status, body)
+    }
+  }
+  return {
+    NextRequest: class NextRequest {},
+    NextResponse,
+  }
+})
+
 // Mock Next.js router
 jest.mock('next/navigation', () => ({
   useRouter() {

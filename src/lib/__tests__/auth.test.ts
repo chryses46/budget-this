@@ -3,6 +3,7 @@ jest.mock('@/lib/prisma', () => ({
   prisma: {
     user: {
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       findMany: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
@@ -20,6 +21,10 @@ jest.mock('./auth-utils', () => ({
 jest.mock('./email', () => ({
   sendMfaCode: jest.fn(),
   sendVerificationEmail: jest.fn(),
+}))
+
+jest.mock('@/lib/field-encryption', () => ({
+  hashForLookup: jest.fn((s: string) => 'hash-' + s),
 }))
 
 import { authOptions } from '../auth'
@@ -74,7 +79,7 @@ describe('auth', () => {
     }
 
     beforeEach(() => {
-      mockPrisma.user.findUnique.mockResolvedValue(mockUser as any)
+      mockPrisma.user.findFirst.mockResolvedValue(mockUser as any)
     })
 
     it('should return null when email is missing', async () => {
@@ -85,7 +90,7 @@ describe('auth', () => {
     })
 
     it('should return null when user is not found', async () => {
-      mockPrisma.user.findUnique.mockResolvedValue(null)
+      mockPrisma.user.findFirst.mockResolvedValue(null)
 
       const credentialsProvider = authOptions.providers[0] as any
       const result = await credentialsProvider.authorize({
@@ -97,7 +102,7 @@ describe('auth', () => {
     })
 
     it('should return null when email is not verified', async () => {
-      mockPrisma.user.findUnique.mockResolvedValue({
+      mockPrisma.user.findFirst.mockResolvedValue({
         ...mockUser,
         emailVerified: false,
       } as any)
@@ -140,7 +145,7 @@ describe('auth', () => {
 
     it('should return null when MFA is enabled but not verified', async () => {
       mockVerifyPassword.mockResolvedValue(true)
-      mockPrisma.user.findUnique.mockResolvedValue({
+      mockPrisma.user.findFirst.mockResolvedValue({
         ...mockUser,
         mfaEnabled: true,
       } as any)
@@ -157,7 +162,7 @@ describe('auth', () => {
 
     it('should return user when MFA is enabled and verified', async () => {
       mockVerifyPassword.mockResolvedValue(true)
-      mockPrisma.user.findUnique.mockResolvedValue({
+      mockPrisma.user.findFirst.mockResolvedValue({
         ...mockUser,
         mfaEnabled: true,
       } as any)

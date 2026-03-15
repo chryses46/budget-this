@@ -1,18 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { requireApiAuth } from '@/lib/api-auth'
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
-    }
-    const userId = session.user.id
+    const auth = await requireApiAuth(request)
+    if (auth instanceof NextResponse) return auth
+    const { userId } = auth
 
     const { searchParams } = new URL(request.url)
     const accountId = searchParams.get('accountId')
@@ -70,14 +64,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
-    }
-    const userId = session.user.id
+    const auth = await requireApiAuth(request)
+    if (auth instanceof NextResponse) return auth
+    const { userId } = auth
 
     const body = await request.json()
     const { plaidTransactionId, accountId, amount, type, status, date, name, merchantName, category, subcategory, location, paymentChannel, pending, isoCurrencyCode, unofficialCurrencyCode } = body

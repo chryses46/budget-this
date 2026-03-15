@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
+import { hashForLookup } from '@/lib/field-encryption'
 import { hashPassword } from '@/lib/auth'
 
 const resetPasswordSchema = z.object({
@@ -13,9 +14,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { token, password } = resetPasswordSchema.parse(body)
 
-    // Find valid reset token
-    const passwordReset = await prisma.passwordReset.findUnique({
-      where: { token },
+    // Find valid reset token by hash (tokens stored as hash only)
+    const passwordReset = await prisma.passwordReset.findFirst({
+      where: { tokenHash: hashForLookup(token) },
       include: { user: true }
     })
 

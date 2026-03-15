@@ -19,6 +19,9 @@ jest.mock('next-auth/react', () => ({
   SessionProvider: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="session-provider">{children}</div>
   ),
+  useSession: jest.fn(() => ({ data: null, status: 'unauthenticated' })),
+  signIn: jest.fn(),
+  signOut: jest.fn(),
 }))
 
 describe('Providers', () => {

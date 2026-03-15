@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Calendar, TrendingUp, AlertCircle, Plus, CreditCard, PieChart, CheckCircle, Star } from 'lucide-react'
+import { Calendar, TrendingUp, AlertCircle, Plus, CreditCard, PieChart, CheckCircle, Star, Receipt } from 'lucide-react'
 import { Navigation } from '@/components/Navigation'
 import { useUser } from '@/contexts/UserContext'
 
@@ -14,6 +14,7 @@ interface Bill {
   frequency: 'Weekly' | 'Monthly' | 'Yearly'
   isPaid: boolean
   paidAt?: string
+  isAutopay?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -47,14 +48,106 @@ interface Account {
   updatedAt: string
 }
 
+interface LastExpenditure {
+  id: string
+  title: string
+  amount: number
+  createdAt: string
+  category?: { title: string }
+}
+
 interface DashboardData {
   totalAccounts: number
   totalAssets: number
   accounts: Account[]
   topBills: Array<{ title: string; amount: number }>
-  upcomingBills: Array<{ title: string; amount: number; dayDue: number; frequency: string; isPaid: boolean; paidAt?: string }>
+  upcomingBills: Array<{ title: string; amount: number; dayDue: number; frequency: string; isPaid: boolean; paidAt?: string; paidThisPeriod?: boolean }>
   spendingCategories: Array<{ category: string; amount: number; remaining: number }>
-  burnDownData: Array<{ month: string; remaining: number }>
+  last5Expenditures: LastExpenditure[]
+  burnDownLineData: Array<{ day: number; assets: number }>
+  burnDownDaysInMonth: number
+}
+
+const chartPadding = { top: 8, right: 8, bottom: 28, left: 52 }
+const chartWidth = 280
+const chartHeight = 140
+
+function BurnDownLineChart({
+  points,
+  daysInMonth
+}: {
+  points: Array<{ day: number; assets: number }>
+  daysInMonth: number
+}) {
+  if (points.length < 2) return null
+  const maxAssets = Math.max(...points.map(p => p.assets), 1)
+  const minAssets = Math.min(...points.map(p => p.assets), 0)
+  const yRange = maxAssets - minAssets || 1
+  const w = chartWidth - chartPadding.left - chartPadding.right
+  const h = chartHeight - chartPadding.top - chartPadding.bottom
+  const x = (day: number) => chartPadding.left + ((day - 1) / (daysInMonth - 1 || 1)) * w
+  const y = (assets: number) => chartPadding.top + h - ((assets - minAssets) / yRange) * h
+  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(p.day)} ${y(p.assets)}`).join(' ')
+  return (
+    <div className="overflow-x-auto">
+      <svg
+        viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+        className="w-full min-w-[280px] h-[140px]"
+        preserveAspectRatio="xMidYMid meet"
+      >
+        <text
+          x={chartPadding.left - 8}
+          y={chartPadding.top + h / 2}
+          textAnchor="middle"
+          className="text-[10px] fill-gray-500 dark:fill-gray-400"
+          transform={`rotate(-90 ${chartPadding.left - 8} ${chartPadding.top + h / 2})`}
+        >
+          Total Cash Assets
+        </text>
+        <text
+          x={chartPadding.left + w / 2}
+          y={chartHeight - 4}
+          textAnchor="middle"
+          className="text-[10px] fill-gray-500 dark:fill-gray-400"
+        >
+          Days in month
+        </text>
+        <line
+          x1={chartPadding.left}
+          y1={chartPadding.top}
+          x2={chartPadding.left}
+          y2={chartPadding.top + h}
+          className="stroke-gray-300 dark:stroke-gray-600"
+          strokeWidth="1"
+        />
+        <line
+          x1={chartPadding.left}
+          y1={chartPadding.top + h}
+          x2={chartPadding.left + w}
+          y2={chartPadding.top + h}
+          className="stroke-gray-300 dark:stroke-gray-600"
+          strokeWidth="1"
+        />
+        <path
+          d={pathD}
+          fill="none"
+          className="stroke-indigo-600 dark:stroke-indigo-400"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {points.map((p, i) => (
+          <circle
+            key={i}
+            cx={x(p.day)}
+            cy={y(p.assets)}
+            r="3"
+            className="fill-indigo-600 dark:fill-indigo-400"
+          />
+        ))}
+      </svg>
+    </div>
+  )
 }
 
 export default function DashboardPage() {
@@ -72,16 +165,21 @@ export default function DashboardPage() {
     try {
       setIsLoading(true)
       
-      // Fetch bills, budget categories, and accounts in parallel
-      const [billsResponse, categoriesResponse, accountsResponse] = await Promise.all([
+      // Fetch bills, budget categories, accounts, last 5 expenditures, and current-month categories (for burn down) in parallel
+      const [billsResponse, categoriesResponse, accountsResponse, expendituresResponse, categoriesCurrentMonthResponse] = await Promise.all([
         fetch('/api/bills'),
         fetch('/api/budget-categories'),
-        fetch('/api/accounts')
+        fetch('/api/accounts'),
+        fetch('/api/expenditures?limit=5&page=1'),
+        fetch('/api/budget-categories?currentMonthOnly=true')
       ])
 
       const bills: Bill[] = billsResponse.ok ? await billsResponse.json() : []
       const categories: BudgetCategory[] = categoriesResponse.ok ? await categoriesResponse.json() : []
       const accounts: Account[] = accountsResponse.ok ? await accountsResponse.json() : []
+      const expendituresJson = expendituresResponse.ok ? await expendituresResponse.json() : { data: [] }
+      const last5Expenditures: LastExpenditure[] = expendituresJson.data ?? []
+      const categoriesCurrentMonth: BudgetCategory[] = categoriesCurrentMonthResponse.ok ? await categoriesCurrentMonthResponse.json() : []
 
       // Process bills data
       const topBills = bills
@@ -92,8 +190,8 @@ export default function DashboardPage() {
           amount: bill.amount
         }))
 
-      // Calculate upcoming bills (next 5 due dates)
-      const upcomingBills = calculateUpcomingBills(bills).slice(0, 5)
+      // Calculate upcoming bills (next 5 not yet paid this period, by due date)
+      const upcomingBills = calculateUpcomingBills(bills)
 
       // Process budget categories for spending data
       const spendingCategories = categories
@@ -112,6 +210,72 @@ export default function DashboardPage() {
       // Calculate total assets from all accounts
       const totalAssets = accounts.reduce((sum, account) => sum + account.balance, 0)
 
+      // Burn down: estimate how much money you'll have left at end of month based on current expenditures
+      const currentMonthExpendituresTotal = categoriesCurrentMonth.reduce(
+        (sum, cat) => sum + (cat.expenditures || []).reduce((s, exp) => s + exp.amount, 0),
+        0
+      )
+      const now = new Date()
+      const currentMonthLabel = now.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+
+      // Bills still to pay this period (not yet paid / not autopay due)
+      const isBillPaidThisPeriod = (b: Bill) => {
+        if (b.isPaid && b.paidAt) {
+          const paidAt = new Date(b.paidAt)
+          if (b.frequency === 'Monthly' || b.frequency === 'Weekly') {
+            if (paidAt.getMonth() === now.getMonth() && paidAt.getFullYear() === now.getFullYear()) return true
+          } else if (b.frequency === 'Yearly' && paidAt.getFullYear() === now.getFullYear()) return true
+        }
+        if (b.isAutopay) {
+          const currentDay = now.getDate()
+          if (b.frequency === 'Monthly' && currentDay >= b.dayDue) return true
+          if (b.frequency === 'Weekly') {
+            const billDate = new Date(b.createdAt)
+            const daysDiff = Math.floor((now.getTime() - billDate.getTime()) / (1000 * 60 * 60 * 24))
+            if (daysDiff >= 7) return true
+          }
+          if (b.frequency === 'Yearly') {
+            const billDate = new Date(b.createdAt)
+            const daysDiff = Math.floor((now.getTime() - billDate.getTime()) / (1000 * 60 * 60 * 24))
+            if (daysDiff >= 365) return true
+          }
+        }
+        return false
+      }
+      const billsRemainingThisMonth = bills
+        .filter(b => !isBillPaidThisPeriod(b))
+        .reduce((sum, b) => sum + b.amount, 0)
+
+      // Projected spending for rest of month from current burn rate (expenditures only)
+      const dayOfMonth = now.getDate()
+      const daysElapsed = Math.max(1, dayOfMonth)
+      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+      const daysLeft = Math.max(0, daysInMonth - dayOfMonth)
+      const dailyBurnRate = currentMonthExpendituresTotal / daysElapsed
+      const projectedExpendituresRestOfMonth = dailyBurnRate * daysLeft
+
+      const estimatedEndOfMonth =
+        totalAssets - billsRemainingThisMonth - currentMonthExpendituresTotal - projectedExpendituresRestOfMonth
+
+      // Start-of-month assets = current assets + what we've spent/paid out this month
+      const billsPaidThisMonth = bills
+        .filter(b => isBillPaidThisPeriod(b))
+        .reduce((sum, b) => sum + b.amount, 0)
+      const startOfMonthAssets = totalAssets + currentMonthExpendituresTotal + billsPaidThisMonth
+
+      const assetsDay1 = Math.max(0, startOfMonthAssets)
+      const assetsToday = Math.max(0, totalAssets)
+      const assetsEndOfMonth = Math.max(0, estimatedEndOfMonth)
+
+      const linePoints: Array<{ day: number; assets: number }> = [
+        { day: 1, assets: assetsDay1 },
+        { day: dayOfMonth, assets: assetsToday },
+        { day: daysInMonth, assets: assetsEndOfMonth }
+      ]
+      const burnDownLineData = linePoints
+        .filter((p, i, arr) => arr.findIndex(x => x.day === p.day) === i)
+        .sort((a, b) => a.day - b.day)
+
       setData({
         totalAccounts: accounts.length,
         totalAssets,
@@ -119,7 +283,9 @@ export default function DashboardPage() {
         topBills,
         upcomingBills,
         spendingCategories,
-        burnDownData: [] // Will be implemented when bank accounts are connected
+        last5Expenditures,
+        burnDownLineData,
+        burnDownDaysInMonth: daysInMonth
       })
     } catch (error) {
       setData({
@@ -129,12 +295,51 @@ export default function DashboardPage() {
         topBills: [],
         upcomingBills: [],
         spendingCategories: [],
-        burnDownData: []
+        last5Expenditures: [],
+        burnDownLineData: [],
+        burnDownDaysInMonth: 0
       })
     } finally {
       setIsLoading(false)
     }
   }
+
+  /** True if bill was manually paid in the current period (month/year); past periods do not count as paid. */
+  const isPaidThisPeriod = (bill: Bill) => {
+    if (!bill.isPaid || !bill.paidAt) return false
+    const today = new Date()
+    const paidAt = new Date(bill.paidAt)
+    if (bill.frequency === 'Monthly' || bill.frequency === 'Weekly') {
+      return paidAt.getMonth() === today.getMonth() && paidAt.getFullYear() === today.getFullYear()
+    }
+    if (bill.frequency === 'Yearly') {
+      return paidAt.getFullYear() === today.getFullYear()
+    }
+    return false
+  }
+
+  /** True if bill is autopay and we're at or past the due date for the current period (show as paid in UI). */
+  const isAutopayDue = (bill: Bill) => {
+    if (!bill.isAutopay) return false
+    const today = new Date()
+    const currentDay = today.getDate()
+    if (bill.frequency === 'Monthly') {
+      return currentDay >= bill.dayDue
+    }
+    if (bill.frequency === 'Weekly') {
+      const billDate = new Date(bill.createdAt)
+      const daysDiff = Math.floor((today.getTime() - billDate.getTime()) / (1000 * 60 * 60 * 24))
+      return daysDiff >= 7
+    }
+    if (bill.frequency === 'Yearly') {
+      const billDate = new Date(bill.createdAt)
+      const daysDiff = Math.floor((today.getTime() - billDate.getTime()) / (1000 * 60 * 60 * 24))
+      return daysDiff >= 365
+    }
+    return false
+  }
+
+  const displayAsPaid = (bill: Bill) => isPaidThisPeriod(bill) || isAutopayDue(bill)
 
   const calculateUpcomingBills = (bills: Bill[]) => {
     const today = new Date()
@@ -164,17 +369,23 @@ export default function DashboardPage() {
           }
         }
 
+        const paid = displayAsPaid(bill)
+        const paidThisPeriod = isPaidThisPeriod(bill)
+
         return {
           title: bill.title,
           amount: bill.amount,
           dayDue: nextDueDate.getDate(),
           frequency: bill.frequency,
-          isPaid: bill.isPaid,
+          isPaid: paid,
           paidAt: bill.paidAt,
+          paidThisPeriod,
           dueDate: nextDueDate
         }
       })
+      .filter(b => !b.isPaid) // Only show bills not yet paid this period (truly "upcoming")
       .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime()) // Soonest first
+      .slice(0, 5)
       .map(({ dueDate, ...bill }) => bill) // Remove dueDate from final result
   }
 
@@ -343,7 +554,7 @@ export default function DashboardPage() {
                         bill.dayDue === 23 ? 'rd' :
                         bill.dayDue === 31 ? 'st' :
                         'th'}
-                        {bill.isPaid && bill.paidAt && (
+                        {bill.paidThisPeriod && bill.paidAt && (
                           <span className="ml-2 text-green-600 dark:text-green-400">
                             • Paid on {new Date(bill.paidAt).toLocaleDateString()}
                           </span>
@@ -390,29 +601,65 @@ export default function DashboardPage() {
           </div>
 
 
+          {/* Last 5 Expenditures */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white">Last 5 Expenditures</h3>
+              <Receipt className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+            </div>
+            {data?.last5Expenditures.length === 0 ? (
+              <div className="text-center py-8">
+                <Receipt className="h-12 w-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+                <p className="text-gray-500 dark:text-gray-400 mb-4">No expenditures yet</p>
+                <Link href="/expenditures" className="bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 flex items-center justify-center mx-auto">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Expenditure
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {data?.last5Expenditures.map((exp) => (
+                  <div key={exp.id} className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                    <div>
+                      <span className="text-gray-900 dark:text-white">{exp.title}</span>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        {new Date(exp.createdAt).toLocaleDateString()}
+                        {exp.category?.title && ` • ${exp.category.title}`}
+                      </p>
+                    </div>
+                    <span className="font-medium text-gray-900 dark:text-white">${exp.amount.toFixed(2)}</span>
+                  </div>
+                ))}
+                <div className="pt-2">
+                  <Link href="/expenditures" className="w-full bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white py-2 px-3 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-sm">
+                    View all expenditures
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Burn Down Chart */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 md:col-span-2 lg:col-span-1">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-gray-900 dark:text-white">Burn Down Chart</h3>
               <TrendingUp className="h-5 w-5 text-gray-400 dark:text-gray-500" />
             </div>
-            {data?.burnDownData.length === 0 ? (
+            {!data?.burnDownLineData.length || data.burnDownDaysInMonth === 0 ? (
               <div className="text-center py-8">
                 <TrendingUp className="h-12 w-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
                 <p className="text-gray-500 dark:text-gray-400 mb-4">No data available</p>
-                <p className="text-sm text-gray-400 dark:text-gray-500">Add bills and budget categories to see your burn down chart</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500">Add accounts, bills and expenditures to see your burn down</p>
               </div>
             ) : (
-              <div className="h-32 flex items-end justify-between">
-                {data?.burnDownData.map((point, index) => (
-                  <div key={index} className="flex flex-col items-center">
-                    <div 
-                      className="bg-indigo-600 w-8 rounded-t"
-                      style={{ height: `${(point.remaining / 10000) * 100}px` }}
-                    ></div>
-                    <span className="text-xs text-gray-500 dark:text-gray-400 mt-2">{point.month}</span>
-                  </div>
-                ))}
+              <div className="space-y-2">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Total cash assets from start of month to projected end of month
+                </p>
+                <BurnDownLineChart
+                  points={data.burnDownLineData}
+                  daysInMonth={data.burnDownDaysInMonth}
+                />
               </div>
             )}
           </div>

@@ -1,22 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { updateAccountSchema } from '@/lib/validations'
 import { prisma } from '@/lib/prisma'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { decryptQueryResult } from '@/lib/prisma-encryption-middleware'
+import { requireApiAuth } from '@/lib/api-auth'
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
-    }
-    const userId = session.user.id
+    const auth = await requireApiAuth(request)
+    if (auth instanceof NextResponse) return auth
+    const { userId } = auth
 
     const { id } = await params
     const body = await request.json()
@@ -42,6 +37,7 @@ export async function PUT(
       }
     })
 
+    decryptQueryResult(account)
     return NextResponse.json(account)
   } catch (error) {
     return NextResponse.json(
@@ -56,14 +52,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
-    }
-    const userId = session.user.id
+    const auth = await requireApiAuth(request)
+    if (auth instanceof NextResponse) return auth
+    const { userId } = auth
 
     const { id } = await params
 

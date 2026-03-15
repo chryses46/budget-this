@@ -1,16 +1,27 @@
 import { NextRequest } from 'next/server'
 import { POST } from '../verify-email/route'
 import { prisma } from '@/lib/prisma'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getServerSession } from '@/lib/auth'
 
 // Mock dependencies
-jest.mock('@/lib/prisma')
-jest.mock('next-auth')
-jest.mock('@/lib/auth')
+jest.mock('@/lib/prisma', () => ({
+  prisma: {
+    user: { findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
+    mfaCode: { findFirst: jest.fn(), update: jest.fn() },
+  },
+}))
+jest.mock('@/lib/auth', () => ({
+  getServerSession: jest.fn(),
+  authOptions: {},
+}))
+jest.mock('@/lib/field-encryption', () => ({
+  hashForLookup: jest.fn((s: string) => 'hash-' + s),
+}))
 
 const mockPrisma = prisma as jest.Mocked<typeof prisma>
 const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>
+
+const VALID_USER_ID = 'a1b2c3d4-e5f6-4789-a012-3456789abcde'
 
 describe('/api/auth/verify-email', () => {
   beforeEach(() => {
@@ -20,7 +31,7 @@ describe('/api/auth/verify-email', () => {
   it('should verify email successfully', async () => {
     const requestBody = {
       code: '123456',
-      userId: 'user-123',
+      userId: VALID_USER_ID,
     }
 
     const mockRequest = {
@@ -28,7 +39,7 @@ describe('/api/auth/verify-email', () => {
     } as unknown as NextRequest
 
     const mockUser = {
-      id: 'user-123',
+      id: VALID_USER_ID,
       email: 'john@example.com',
       firstName: 'John',
       lastName: 'Doe',
@@ -38,7 +49,7 @@ describe('/api/auth/verify-email', () => {
     const mockMfaCode = {
       id: 'mfa-123',
       code: '123456',
-      userId: 'user-123',
+      userId: VALID_USER_ID,
       used: false,
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // Future date
     }
@@ -55,7 +66,7 @@ describe('/api/auth/verify-email', () => {
     expect(responseData).toEqual({
       message: 'Email verified successfully',
       user: {
-        id: 'user-123',
+        id: VALID_USER_ID,
         email: 'john@example.com',
         firstName: 'John',
         lastName: 'Doe',
@@ -63,12 +74,12 @@ describe('/api/auth/verify-email', () => {
     })
 
     expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
-      where: { id: 'user-123' },
+      where: { id: VALID_USER_ID },
     })
     expect(mockPrisma.mfaCode.findFirst).toHaveBeenCalledWith({
       where: {
-        userId: 'user-123',
-        code: '123456',
+        userId: VALID_USER_ID,
+        codeHash: 'hash-123456',
         used: false,
         expiresAt: {
           gt: expect.any(Date),
@@ -80,7 +91,7 @@ describe('/api/auth/verify-email', () => {
       data: { used: true },
     })
     expect(mockPrisma.user.update).toHaveBeenCalledWith({
-      where: { id: 'user-123' },
+      where: { id: VALID_USER_ID },
       data: { emailVerified: true },
     })
   })
@@ -88,7 +99,7 @@ describe('/api/auth/verify-email', () => {
   it('should return error when user is not found', async () => {
     const requestBody = {
       code: '123456',
-      userId: 'nonexistent-user',
+      userId: VALID_USER_ID,
     }
 
     const mockRequest = {
@@ -111,7 +122,7 @@ describe('/api/auth/verify-email', () => {
   it('should return error when email is already verified', async () => {
     const requestBody = {
       code: '123456',
-      userId: 'user-123',
+      userId: VALID_USER_ID,
     }
 
     const mockRequest = {
@@ -119,7 +130,7 @@ describe('/api/auth/verify-email', () => {
     } as unknown as NextRequest
 
     const mockUser = {
-      id: 'user-123',
+      id: VALID_USER_ID,
       email: 'john@example.com',
       emailVerified: true,
     }
@@ -140,7 +151,7 @@ describe('/api/auth/verify-email', () => {
   it('should return error when verification code is invalid', async () => {
     const requestBody = {
       code: '123456',
-      userId: 'user-123',
+      userId: VALID_USER_ID,
     }
 
     const mockRequest = {
@@ -148,7 +159,7 @@ describe('/api/auth/verify-email', () => {
     } as unknown as NextRequest
 
     const mockUser = {
-      id: 'user-123',
+      id: VALID_USER_ID,
       email: 'john@example.com',
       emailVerified: false,
     }
@@ -170,7 +181,7 @@ describe('/api/auth/verify-email', () => {
   it('should return error when verification code is expired', async () => {
     const requestBody = {
       code: '123456',
-      userId: 'user-123',
+      userId: VALID_USER_ID,
     }
 
     const mockRequest = {
@@ -178,7 +189,7 @@ describe('/api/auth/verify-email', () => {
     } as unknown as NextRequest
 
     const mockUser = {
-      id: 'user-123',
+      id: VALID_USER_ID,
       email: 'john@example.com',
       emailVerified: false,
     }
@@ -186,7 +197,7 @@ describe('/api/auth/verify-email', () => {
     const expiredMfaCode = {
       id: 'mfa-123',
       code: '123456',
-      userId: 'user-123',
+      userId: VALID_USER_ID,
       used: false,
       expiresAt: new Date(Date.now() - 24 * 60 * 60 * 1000), // Past date
     }
@@ -206,7 +217,7 @@ describe('/api/auth/verify-email', () => {
   it('should return error when verification code is already used', async () => {
     const requestBody = {
       code: '123456',
-      userId: 'user-123',
+      userId: VALID_USER_ID,
     }
 
     const mockRequest = {
@@ -214,7 +225,7 @@ describe('/api/auth/verify-email', () => {
     } as unknown as NextRequest
 
     const mockUser = {
-      id: 'user-123',
+      id: VALID_USER_ID,
       email: 'john@example.com',
       emailVerified: false,
     }
@@ -222,7 +233,7 @@ describe('/api/auth/verify-email', () => {
     const usedMfaCode = {
       id: 'mfa-123',
       code: '123456',
-      userId: 'user-123',
+      userId: VALID_USER_ID,
       used: true,
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     }
@@ -261,7 +272,7 @@ describe('/api/auth/verify-email', () => {
   it('should return error when database operation fails', async () => {
     const requestBody = {
       code: '123456',
-      userId: 'user-123',
+      userId: VALID_USER_ID,
     }
 
     const mockRequest = {
@@ -298,7 +309,7 @@ describe('/api/auth/verify-email', () => {
     
     const requestBody = {
       code: '123456',
-      userId: 'user-123',
+      userId: VALID_USER_ID,
     }
 
     const mockRequest = {

@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useForm } from 'react-hook-form'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { useForm, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
 import { billSchema, BillInput } from '@/lib/validations'
 import { cn } from '@/lib/utils'
-import { Plus, Edit, Trash2, Calendar, DollarSign, CheckCircle } from 'lucide-react'
+import { Plus, Edit, Trash2, Calendar, DollarSign, CheckCircle, Search } from 'lucide-react'
 import { Navigation } from '@/components/Navigation'
 import { useUser } from '@/contexts/UserContext'
 
@@ -24,6 +24,7 @@ interface Bill {
   }
   isPaid: boolean
   paidAt?: string
+  isAutopay?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -41,14 +42,18 @@ export default function BillsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingBill, setEditingBill] = useState<Bill | null>(null)
-
+  const [searchQuery, setSearchQuery] = useState('')
+  const [typeFilter, setTypeFilter] = useState<string>('')
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
+  const [filterAutopay, setFilterAutopay] = useState(false)
   const {
     register,
     handleSubmit,
     reset,
     formState: { errors },
   } = useForm<BillInput>({
-    resolver: zodResolver(billSchema),
+    resolver: zodResolver(billSchema) as Resolver<BillInput>,
+    defaultValues: { isAutopay: false },
   })
 
   useEffect(() => {
@@ -71,8 +76,19 @@ export default function BillsPage() {
       setBills([])
     } finally {
       setIsLoading(false)
+      setIsInitialLoad(false)
     }
   }
+
+  const filteredBills = useMemo(() => {
+    return bills.filter((bill) => {
+      const matchesSearch = !searchQuery.trim() ||
+        bill.title.toLowerCase().includes(searchQuery.trim().toLowerCase())
+      const matchesType = !typeFilter || bill.frequency === typeFilter
+      const matchesAutopay = !filterAutopay || bill.isAutopay === filterAutopay
+      return matchesSearch && matchesType && matchesAutopay
+    })
+  }, [bills, searchQuery, typeFilter, filterAutopay])
 
   const fetchBudgetCategories = async () => {
     try {
@@ -99,11 +115,7 @@ export default function BillsPage() {
         })
         
         if (response.ok) {
-          const updatedBill = await response.json()
-          setBills(bills.map(bill => 
-            bill.id === editingBill.id ? updatedBill : bill
-          ))
-        } else {
+          await fetchBills()
         }
       } else {
         // Create new bill
@@ -114,9 +126,7 @@ export default function BillsPage() {
         })
         
         if (response.ok) {
-          const newBill = await response.json()
-          setBills([...bills, newBill])
-        } else {
+          await fetchBills()
         }
       }
       
@@ -142,8 +152,7 @@ export default function BillsPage() {
       const response = await fetch(`/api/bills/${id}`, { method: 'DELETE' })
       
       if (response.ok) {
-        setBills(bills.filter(bill => bill.id !== id))
-      } else {
+        await fetchBills()
       }
     } catch (error) {
     }
@@ -155,31 +164,60 @@ export default function BillsPage() {
     setEditingBill(null)
   }
 
-  const isBillLate = (bill: Bill) => {
-    if (bill.isPaid) return false
-    
+  /** True if bill is autopay and we're at or past the due date for the current period (show as paid in UI). */
+  const isAutopayDue = (bill: Bill) => {
+    if (!bill.isAutopay) return false
     const today = new Date()
     const currentDay = today.getDate()
-    
-    // For monthly bills, check if we're past the due day this month
+    if (bill.frequency === 'Monthly') {
+      return currentDay >= bill.dayDue
+    }
+    if (bill.frequency === 'Weekly') {
+      const billDate = new Date(bill.createdAt)
+      const daysDiff = Math.floor((today.getTime() - billDate.getTime()) / (1000 * 60 * 60 * 24))
+      return daysDiff >= 7
+    }
+    if (bill.frequency === 'Yearly') {
+      const billDate = new Date(bill.createdAt)
+      const daysDiff = Math.floor((today.getTime() - billDate.getTime()) / (1000 * 60 * 60 * 24))
+      return daysDiff >= 365
+    }
+    return false
+  }
+
+  /** True if bill was manually paid in the current period (month/year); past periods do not count as paid. */
+  const isPaidThisPeriod = (bill: Bill) => {
+    if (!bill.isPaid || !bill.paidAt) return false
+    const today = new Date()
+    const paidAt = new Date(bill.paidAt)
+    if (bill.frequency === 'Monthly' || bill.frequency === 'Weekly') {
+      return paidAt.getMonth() === today.getMonth() && paidAt.getFullYear() === today.getFullYear()
+    }
+    if (bill.frequency === 'Yearly') {
+      return paidAt.getFullYear() === today.getFullYear()
+    }
+    return false
+  }
+
+  const displayAsPaid = (bill: Bill) => isPaidThisPeriod(bill) || isAutopayDue(bill)
+
+  const isBillLate = (bill: Bill) => {
+    if (displayAsPaid(bill)) return false
+    const today = new Date()
+    const currentDay = today.getDate()
     if (bill.frequency === 'Monthly') {
       return currentDay > bill.dayDue
     }
-    
-    // For weekly bills, check if it's been more than 7 days since creation
     if (bill.frequency === 'Weekly') {
       const billDate = new Date(bill.createdAt)
       const daysDiff = Math.floor((today.getTime() - billDate.getTime()) / (1000 * 60 * 60 * 24))
       return daysDiff > 7
     }
-    
-    // For yearly bills, check if it's been more than 365 days since creation
     if (bill.frequency === 'Yearly') {
       const billDate = new Date(bill.createdAt)
       const daysDiff = Math.floor((today.getTime() - billDate.getTime()) / (1000 * 60 * 60 * 24))
       return daysDiff > 365
     }
-    
     return false
   }
 
@@ -199,12 +237,7 @@ export default function BillsPage() {
       })
       
       if (response.ok) {
-        // Update the bill in the local state
-        setBills(bills.map(b => 
-          b.id === bill.id 
-            ? { ...b, isPaid: true, paidAt: new Date().toISOString() }
-            : b
-        ))
+        await fetchBills()
         alert('Bill marked as paid!')
       } else {
         const error = await response.json()
@@ -215,7 +248,7 @@ export default function BillsPage() {
     }
   }
 
-  if (userLoading || isLoading) {
+  if (userLoading || (isLoading && isInitialLoad)) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
@@ -263,30 +296,75 @@ export default function BillsPage() {
           </button>
         </div>
 
+        {/* Search by bill name or type and autopay */}
+        <div className="flex flex-wrap gap-3 items-end mb-6">
+          <div className="flex-1 min-w-[200px]">
+            <label htmlFor="bill-search" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Search by name
+            </label>
+            <div className="relative">
+              <input
+                id="bill-search"
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
+                aria-label="Search bills by name"
+                placeholder="e.g. Rent, Electric"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
+            </div>
+          </div>
+          <div className="w-full sm:w-auto sm:min-w-[140px]">
+            <label htmlFor="bill-type" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Bill type
+            </label>
+            <select
+              id="bill-type"
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+            >
+              <option value="">All types</option>
+              <option value="Monthly">Monthly</option>
+              <option value="Yearly">Yearly</option>
+            </select>
+            <label htmlFor="is-autopay" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Autopay
+            </label>
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="is-autopay"
+                checked={filterAutopay}
+                onChange={() => setFilterAutopay(!filterAutopay)}
+                className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 bg-white dark:bg-gray-700"
+              />
+            </div>
+          </div>
+        </div>
+
         {/*Bill Total */}
-        {bills.length === 0 ? (
+        {filteredBills.length === 0 ? (
             <div className="text-center py-12">
-              <Calendar className="h-12 w-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No bills yet</h3>
-              <p className="text-gray-500 dark:text-gray-400 mb-4">Get started by adding your first bill</p>
-              <button
-                onClick={() => {
-                  setShowForm(true)
-                  // Scroll to top to show the form
-                  window.scrollTo({ top: 0, behavior: 'smooth' })
-                }}
-                className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center mx-auto"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Your First Bill
-              </button>
+              
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">{bills.length === 0 ? 'No bills yet' : 'No matching bills'}</h3>
             </div>
           ) : (
-          <div className="text-center bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
-            <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-              Monthly Bill Total :
-              <p className="text-3xl font-bold text-gray-900 dark:text-white">${bills.reduce((total, bill) => total + (bill.frequency === 'Monthly' ? bill.amount : 0), 0).toFixed(2)}</p>
-            </h2>
+          <div className="text-center bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6 flex flex-wrap gap-6">
+            <div className="flex-1 min-w-0">
+              <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4 col-sm">
+                Monthly Bill Total :
+                <p className="text-3xl font-bold text-gray-900 dark:text-white">${filteredBills.reduce((total, bill) => total + (bill.frequency === 'Monthly' ? bill.amount : 0), 0).toFixed(2)}</p>
+              </h2>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4 col-sm">
+                Today&apos;s Date:
+                <p className="text-3xl font-bold text-gray-900 dark:text-white">{new Date().toLocaleDateString()}</p>
+              </h2>
+            </div>
           </div>
           )}
         {/*Edit Bill Form */}
@@ -398,6 +476,18 @@ export default function BillsPage() {
                     <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.budgetCategoryId.message}</p>
                   )}
                 </div>
+
+                <div className="flex items-center">
+                  <input
+                    {...register('isAutopay')}
+                    id="isAutopay"
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 bg-white dark:bg-gray-700"
+                  />
+                  <label htmlFor="isAutopay" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                    Is Autopay
+                  </label>
+                </div>
               </div>
 
               <div className="flex justify-end space-x-3">
@@ -421,11 +511,12 @@ export default function BillsPage() {
 
         {/* Bills List */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-          {bills.length === 0 ? (
+          {filteredBills.length === 0 ? (
             <div className="text-center py-12">
               <Calendar className="h-12 w-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No bills yet</h3>
-              <p className="text-gray-500 dark:text-gray-400 mb-4">Get started by adding your first bill</p>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">{bills.length === 0 ? 'No bills yet' : 'No matching bills'}</h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-4">{bills.length === 0 ? 'Get started by adding your first bill' : 'Try a different search or filter'}</p>
+              {bills.length === 0 && (
               <button
                 onClick={() => {
                   setShowForm(true)
@@ -437,10 +528,11 @@ export default function BillsPage() {
                 <Plus className="h-4 w-4 mr-2" />
                 Add Your First Bill
               </button>
+              )}
             </div>
           ) : (
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
-              {bills.map((bill) => (
+              {filteredBills.map((bill) => (
                 <div key={bill.id} className="p-4 sm:p-6 hover:bg-gray-50 dark:hover:bg-gray-700">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div className="flex-1 min-w-0">
@@ -473,7 +565,7 @@ export default function BillsPage() {
                               {bill.budgetCategory.title}
                             </span>
                           )}
-                          {bill.isPaid && (
+                          {displayAsPaid(bill) && (
                             <span className="px-2 py-1 bg-green-100 dark:bg-green-600 rounded-full text-xs text-green-700 dark:text-green-300 whitespace-nowrap">
                               Paid
                             </span>
@@ -483,11 +575,16 @@ export default function BillsPage() {
                               Late
                             </span>
                           )}
+                          {bill.isAutopay && (
+                            <span className="px-2 py-1 bg-yellow-100 dark:bg-yellow-600 rounded-full text-xs text-yellow-700 dark:text-yellow-300 whitespace-nowrap">
+                              Autopay
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center justify-end sm:justify-start space-x-2 flex-shrink-0">
-                      {bill.budgetCategoryId && !bill.isPaid && (
+                      {bill.budgetCategoryId && !bill.isPaid && !bill.isAutopay && !displayAsPaid(bill) && (
                         <button
                           onClick={() => handlePayBill(bill)}
                           className="p-2 text-gray-400 dark:text-gray-500 hover:text-green-600 dark:hover:text-green-400"

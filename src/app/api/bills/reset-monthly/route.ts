@@ -1,18 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { requireApiAuth } from '@/lib/api-auth'
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
-    }
-    const userId = session.user.id
+    const auth = await requireApiAuth(request)
+    if (auth instanceof NextResponse) return auth
+    const { userId } = auth
 
     // Reset all paid bills for the user
     const result = await prisma.bill.updateMany({

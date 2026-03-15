@@ -69,10 +69,10 @@ describe('Navigation', () => {
       </ThemeProvider>
     )
 
-    expect(screen.getByText('Dashboard')).toBeInTheDocument()
-    expect(screen.getByText('Bills')).toBeInTheDocument()
-    expect(screen.getByText('Budget')).toBeInTheDocument()
-    expect(screen.getByText('Accounts')).toBeInTheDocument()
+    expect(screen.getAllByText('Dashboard').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Bills').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Budget').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Accounts').length).toBeGreaterThanOrEqual(1)
   })
 
   it('should render user information when user is logged in', () => {
@@ -177,8 +177,8 @@ describe('Navigation', () => {
     const menuButton = screen.getByRole('button', { name: /menu/i })
     fireEvent.click(menuButton)
 
-    const dashboardLink = screen.getByText('Dashboard')
-    fireEvent.click(dashboardLink)
+    const dashboardLinks = screen.getAllByRole('link', { name: /dashboard/i })
+    fireEvent.click(dashboardLinks[dashboardLinks.length - 1]) // Mobile menu link
 
     // Should show menu icon again
     expect(screen.getByRole('button', { name: /menu/i })).toBeInTheDocument()
@@ -216,8 +216,8 @@ describe('Navigation', () => {
       </ThemeProvider>
     )
 
-    const dashboardLink = screen.getByText('Dashboard').closest('a')
-    expect(dashboardLink).toHaveClass('bg-indigo-100', 'dark:bg-indigo-900')
+    const dashboardLinks = screen.getAllByRole('link', { name: /dashboard/i })
+    expect(dashboardLinks[0]).toHaveClass('bg-indigo-100', 'dark:bg-indigo-900')
   })
 
   it('should not highlight inactive pages', () => {
@@ -229,8 +229,8 @@ describe('Navigation', () => {
       </ThemeProvider>
     )
 
-    const billsLink = screen.getByText('Bills').closest('a')
-    expect(billsLink).not.toHaveClass('bg-indigo-100', 'dark:bg-indigo-900')
+    const billsLinks = screen.getAllByRole('link', { name: /bills/i })
+    expect(billsLinks[0]).not.toHaveClass('bg-indigo-100', 'dark:bg-indigo-900')
   })
 
   it('should render user profile link', () => {
@@ -263,17 +263,8 @@ describe('Navigation', () => {
   })
 
   it('should handle case when user is null', () => {
-    const mockUseUserNoUser = {
-      user: null,
-      setUser: jest.fn(),
-      isLoading: false,
-      logout: mockLogout,
-    }
-
-    jest.doMock('@/contexts/UserContext', () => ({
-      ...jest.requireActual('@/contexts/UserContext'),
-      useUser: () => mockUseUserNoUser,
-    }))
+    const previousUser = mockUseUser.user
+    mockUseUser.user = null
 
     render(
       <ThemeProvider>
@@ -283,9 +274,10 @@ describe('Navigation', () => {
       </ThemeProvider>
     )
 
-    // Should not render user-specific elements
     expect(screen.queryByText('John')).not.toBeInTheDocument()
     expect(screen.queryByText('Welcome, John')).not.toBeInTheDocument()
+
+    mockUseUser.user = previousUser
   })
 
   it('should render all navigation links with correct hrefs', () => {
@@ -297,10 +289,12 @@ describe('Navigation', () => {
       </ThemeProvider>
     )
 
-    expect(screen.getByRole('link', { name: /dashboard/i })).toHaveAttribute('href', '/dashboard')
-    expect(screen.getByRole('link', { name: /bills/i })).toHaveAttribute('href', '/bills')
-    expect(screen.getByRole('link', { name: /budget/i })).toHaveAttribute('href', '/budget')
-    expect(screen.getByRole('link', { name: /accounts/i })).toHaveAttribute('href', '/accounts')
+    expect(screen.getByRole('link', { name: /budget this/i })).toHaveAttribute('href', '/dashboard')
+    const allLinks = screen.getAllByRole('link')
+    expect(allLinks.some(l => l.getAttribute('href') === '/dashboard')).toBe(true)
+    expect(allLinks.some(l => l.getAttribute('href') === '/bills')).toBe(true)
+    expect(allLinks.some(l => l.getAttribute('href') === '/budget')).toBe(true)
+    expect(allLinks.some(l => l.getAttribute('href') === '/accounts')).toBe(true)
   })
 
   it('should have proper accessibility attributes', () => {

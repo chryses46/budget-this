@@ -4,8 +4,17 @@ import { prisma } from '@/lib/prisma'
 import { generateMfaCode, sendMfaCode } from '@/lib/auth'
 
 // Mock dependencies
-jest.mock('@/lib/prisma')
+jest.mock('@/lib/prisma', () => ({
+  prisma: {
+    user: { findFirst: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+    mfaCode: { create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
+  },
+}))
 jest.mock('@/lib/auth')
+jest.mock('@/lib/field-encryption', () => ({
+  hashForLookup: jest.fn((s: string) => 'hash-' + s),
+  normalizeEmailForLookup: jest.fn((s: string) => s.toLowerCase().trim()),
+}))
 
 const mockPrisma = prisma as jest.Mocked<typeof prisma>
 const mockGenerateMfaCode = generateMfaCode as jest.MockedFunction<typeof generateMfaCode>
@@ -38,7 +47,7 @@ describe('/api/auth/email-login', () => {
       expiresAt: new Date(),
     }
 
-    mockPrisma.user.findUnique.mockResolvedValue(mockUser as any)
+    mockPrisma.user.findFirst.mockResolvedValue(mockUser as any)
     mockGenerateMfaCode.mockReturnValue('123456')
     mockPrisma.mfaCode.create.mockResolvedValue(mockMfaCode as any)
     mockSendMfaCode.mockResolvedValue(undefined)
@@ -53,13 +62,13 @@ describe('/api/auth/email-login', () => {
       userId: 'user-123',
     })
 
-    expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
-      where: { email: 'john@example.com' },
+    expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
+      where: { emailHash: 'hash-john@example.com' },
     })
     expect(mockGenerateMfaCode).toHaveBeenCalled()
     expect(mockPrisma.mfaCode.create).toHaveBeenCalledWith({
       data: {
-        code: '123456',
+        codeHash: 'hash-123456',
         userId: 'user-123',
         expiresAt: expect.any(Date),
       },
@@ -76,7 +85,7 @@ describe('/api/auth/email-login', () => {
       json: jest.fn().mockResolvedValue(requestBody),
     } as unknown as NextRequest
 
-    mockPrisma.user.findUnique.mockResolvedValue(null)
+    mockPrisma.user.findFirst.mockResolvedValue(null)
 
     const response = await POST(mockRequest)
     const responseData = await response.json()
@@ -104,7 +113,7 @@ describe('/api/auth/email-login', () => {
       emailVerified: false,
     }
 
-    mockPrisma.user.findUnique.mockResolvedValue(mockUser as any)
+    mockPrisma.user.findFirst.mockResolvedValue(mockUser as any)
 
     const response = await POST(mockRequest)
     const responseData = await response.json()
@@ -139,7 +148,7 @@ describe('/api/auth/email-login', () => {
       expiresAt: new Date(),
     }
 
-    mockPrisma.user.findUnique.mockResolvedValue(mockUser as any)
+    mockPrisma.user.findFirst.mockResolvedValue(mockUser as any)
     mockGenerateMfaCode.mockReturnValue('123456')
     mockPrisma.mfaCode.create.mockResolvedValue(mockMfaCode as any)
     mockSendMfaCode.mockRejectedValue(new Error('Email sending failed'))
@@ -180,7 +189,7 @@ describe('/api/auth/email-login', () => {
       json: jest.fn().mockResolvedValue(requestBody),
     } as unknown as NextRequest
 
-    mockPrisma.user.findUnique.mockRejectedValue(new Error('Database error'))
+    mockPrisma.user.findFirst.mockRejectedValue(new Error('Database error'))
 
     const response = await POST(mockRequest)
     const responseData = await response.json()
@@ -213,7 +222,7 @@ describe('/api/auth/email-login', () => {
       expiresAt: new Date(),
     }
 
-    mockPrisma.user.findUnique.mockResolvedValue(mockUser as any)
+    mockPrisma.user.findFirst.mockResolvedValue(mockUser as any)
     mockGenerateMfaCode.mockReturnValue('123456')
     mockPrisma.mfaCode.create.mockResolvedValue(mockMfaCode as any)
     mockSendMfaCode.mockResolvedValue(undefined)

@@ -1,22 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { billSchema } from '@/lib/validations'
 import { prisma } from '@/lib/prisma'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { requireApiAuth } from '@/lib/api-auth'
+
+const FREQUENCY_VALUES = ['Monthly', 'Yearly', 'Weekly'] as const
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
+    const auth = await requireApiAuth(request)
+    if (auth instanceof NextResponse) return auth
+    const { userId } = auth
+
+    const searchParams = request.nextUrl.searchParams
+    const search = searchParams.get('search')?.trim() || undefined
+    const typeParam = searchParams.get('type')?.trim()
+    const filterAutopay = searchParams.get('isAutopay')?.trim() === 'true' ? true : false
+    const frequency = typeParam && FREQUENCY_VALUES.includes(typeParam as (typeof FREQUENCY_VALUES)[number])
+      ? (typeParam as (typeof FREQUENCY_VALUES)[number])
+      : undefined
+
+    const where: { 
+      userId: string; 
+      title?: { contains: string }; 
+      frequency?: (typeof FREQUENCY_VALUES)[number];
+      isAutopay?: boolean
+    } = { userId }
+    if (search) {
+      where.title = { contains: search }
     }
-    const userId = session.user.id
-    
+    if (frequency) {
+      where.frequency = frequency
+    }
+    if (filterAutopay) {
+      where.isAutopay = true
+    }
+
     const bills = await prisma.bill.findMany({
-      where: { userId },
+      where,
       include: {
         budgetCategory: {
           select: {
@@ -40,17 +60,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
-    }
-    const userId = session.user.id
+    const auth = await requireApiAuth(request)
+    if (auth instanceof NextResponse) return auth
+    const { userId } = auth
 
     const body = await request.json()
-    const { title, amount, dayDue, frequency, budgetCategoryId } = billSchema.parse(body)
+    const { title, amount, dayDue, frequency, budgetCategoryId, isAutopay } = billSchema.parse(body)
 
     const bill = await prisma.bill.create({
       data: {
@@ -59,6 +74,7 @@ export async function POST(request: NextRequest) {
         dayDue,
         frequency,
         budgetCategoryId,
+        isAutopay: isAutopay ?? false,
         userId
       }
     })

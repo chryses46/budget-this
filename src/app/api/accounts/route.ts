@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { accountSchema } from '@/lib/validations'
 import { prisma } from '@/lib/prisma'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { decryptQueryResult } from '@/lib/prisma-encryption-middleware'
+import { requireApiAuth } from '@/lib/api-auth'
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
-    }
-    const userId = session.user.id
+    const auth = await requireApiAuth(request)
+    if (auth instanceof NextResponse) return auth
+    const { userId } = auth
     
     const accounts = await prisma.account.findMany({
       where: { userId },
@@ -38,14 +33,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
-    }
-    const userId = session.user.id
+    const auth = await requireApiAuth(request)
+    if (auth instanceof NextResponse) return auth
+    const { userId } = auth
 
     const body = await request.json()
     const { name, type, subtype, institution, institutionId, balance, isMain } = accountSchema.parse(body)
@@ -78,6 +68,7 @@ export async function POST(request: NextRequest) {
       }
     })
 
+    decryptQueryResult(account)
     return NextResponse.json(account)
   } catch (error) {
     return NextResponse.json(

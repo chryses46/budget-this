@@ -272,6 +272,28 @@ describe('validations', () => {
 
       expect(() => expenditureSchema.parse(invalidData)).toThrow()
     })
+
+    it('transforms empty string accountId to undefined', () => {
+      const data = {
+        title: 'Grocery Shopping',
+        amount: 75.25,
+        categoryId: 'cat-123',
+        accountId: '',
+      }
+      const result = expenditureSchema.parse(data)
+      expect(result.accountId).toBeUndefined()
+    })
+
+    it('accepts valid UUID accountId', () => {
+      const data = {
+        title: 'Grocery Shopping',
+        amount: 75.25,
+        categoryId: 'cat-123',
+        accountId: 'a1b2c3d4-e5f6-4789-a012-3456789abcde',
+      }
+      const result = expenditureSchema.parse(data)
+      expect(result.accountId).toBe('a1b2c3d4-e5f6-4789-a012-3456789abcde')
+    })
   })
 
   describe('plaidLinkSchema', () => {

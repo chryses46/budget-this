@@ -41,7 +41,6 @@ yarn-error.log*
 next-env.d.ts
 
 env.example
-public/*
 /src/generated/prisma
 
 /certs
@@ -52,3 +51,6 @@ public/*
 
 jest.config.js
 jest.setup.js
+
+MOBILE_MIGRATION_PLAN.md
+.vscode/
