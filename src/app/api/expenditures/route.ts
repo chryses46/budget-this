@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { expenditureSchema } from '@/lib/validations'
-import { prisma } from '@/lib/prisma'
+import { prisma, type TransactionClient } from '@/lib/prisma'
 import { decryptQueryResult } from '@/lib/prisma-encryption-middleware'
 import { requireApiAuth } from '@/lib/api-auth'
 
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
       effectiveAccount = primary
     }
 
-    const result = await prisma.$transaction(async (tx: typeof prisma) => {
+    const result = await prisma.$transaction(async (tx: TransactionClient) => {
       const expenditure = await tx.expenditure.create({
         data: {
           title,
