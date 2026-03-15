@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       message: 'Plaid integration coming soon'
     })
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: 'Failed to create Plaid link token' },
       { status: 500 }

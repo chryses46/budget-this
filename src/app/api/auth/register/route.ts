@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       message: 'User created successfully. Please check your email for verification code.',
       userId: user.id
     })
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: 'Registration failed' },
       { status: 500 }

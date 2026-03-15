@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     })
 
     return response
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: 'MFA verification failed' },
       { status: 500 }

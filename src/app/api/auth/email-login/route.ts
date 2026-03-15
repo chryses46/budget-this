@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     // Send MFA code via email
     try {
       await sendMfaCode(normalizedEmail, mfaCode)
-    } catch (emailError) {
+    } catch (_emailError) {
       return NextResponse.json(
         { error: 'Failed to send verification code' },
         { status: 500 }
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       requiresMfa: true,
       userId: user.id
     })
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: 'Email login failed' },
       { status: 500 }

@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
       totalCount,
       hasMore: offset + limit < totalCount,
     })
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: 'Failed to fetch transactions' },
       { status: 500 }
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json(transaction)
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: 'Failed to create transaction' },
       { status: 500 }

@@ -29,7 +29,7 @@ export async function PUT(
     })
 
     return NextResponse.json(bill)
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: 'Failed to update bill' },
       { status: 500 }
@@ -53,7 +53,7 @@ export async function DELETE(
     })
 
     return NextResponse.json({ message: 'Bill deleted successfully' })
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: 'Failed to delete bill' },
       { status: 500 }
