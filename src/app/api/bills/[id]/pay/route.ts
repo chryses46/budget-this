@@ -40,7 +40,7 @@ export async function POST(
     }
 
     // Use transaction to ensure bill payment and account transaction are created together
-    const updatedBill = await prisma.$transaction(async (tx) => {
+    const updatedBill = await prisma.$transaction(async (tx: typeof prisma) => {
       // Mark the bill as paid
       const paidBill = await tx.bill.update({
         where: { id },
