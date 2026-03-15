@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { accountTransactionSchema } from '@/lib/validations'
-import { prisma } from '@/lib/prisma'
+import { prisma, type TransactionClient } from '@/lib/prisma'
 import { requireApiAuth } from '@/lib/api-auth'
 
 export async function GET(
@@ -65,7 +65,7 @@ export async function POST(
     }
 
     // Create transaction and update account balance in a transaction
-    const result = await prisma.$transaction(async (tx: typeof prisma) => {
+    const result = await prisma.$transaction(async (tx: TransactionClient) => {
       // Create the account transaction
       const transaction = await tx.accountTransaction.create({
         data: {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { prisma, type TransactionClient } from '@/lib/prisma'
 import { requireApiAuth } from '@/lib/api-auth'
 
 export async function POST(
@@ -40,7 +40,7 @@ export async function POST(
     }
 
     // Use transaction to ensure bill payment and account transaction are created together
-    const updatedBill = await prisma.$transaction(async (tx: typeof prisma) => {
+    const updatedBill = await prisma.$transaction(async (tx: TransactionClient) => {
       // Mark the bill as paid
       const paidBill = await tx.bill.update({
         where: { id },
