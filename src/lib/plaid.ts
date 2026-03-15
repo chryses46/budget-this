@@ -54,31 +54,31 @@ export class PlaidService {
   // - createLinkToken(userId: string): Promise<string>
   // - verifyWebhook(webhookBody: string, webhookSignature: string): boolean
 
-  async exchangePublicToken(publicToken: string): Promise<string> {
+  async exchangePublicToken(_publicToken: string): Promise<string> {
     // TODO: Implement token exchange
     throw new Error('Plaid token exchange not implemented')
   }
 
-  async getAccounts(accessToken: string): Promise<PlaidAccount[]> {
+  async getAccounts(_accessToken: string): Promise<PlaidAccount[]> {
     // TODO: Implement account fetching
     throw new Error('Plaid account fetching not implemented')
   }
 
   async getTransactions(
-    accessToken: string, 
-    startDate: string, 
-    endDate: string
+    _accessToken: string, 
+    _startDate: string, 
+    _endDate: string
   ): Promise<PlaidTransaction[]> {
     // TODO: Implement transaction fetching
     throw new Error('Plaid transaction fetching not implemented')
   }
 
-  async createLinkToken(userId: string): Promise<string> {
+  async createLinkToken(_userId: string): Promise<string> {
     // TODO: Implement link token creation
     throw new Error('Plaid link token creation not implemented')
   }
 
-  verifyWebhook(webhookBody: string, webhookSignature: string): boolean {
+  verifyWebhook(_webhookBody: string, _webhookSignature: string): boolean {
     // TODO: Implement webhook verification
     return false
   }

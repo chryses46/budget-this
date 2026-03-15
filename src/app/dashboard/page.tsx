@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { Calendar, TrendingUp, AlertCircle, Plus, CreditCard, PieChart, CheckCircle, Star, Receipt } from 'lucide-react'
 import { Navigation } from '@/components/Navigation'
@@ -155,13 +155,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    if (user && !userLoading) {
-      fetchDashboardData()
-    }
-  }, [user, userLoading])
-
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       setIsLoading(true)
       
@@ -216,7 +210,7 @@ export default function DashboardPage() {
         0
       )
       const now = new Date()
-      const currentMonthLabel = now.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+      const _currentMonthLabel = now.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
 
       // Bills still to pay this period (not yet paid / not autopay due)
       const isBillPaidThisPeriod = (b: Bill) => {
@@ -287,7 +281,7 @@ export default function DashboardPage() {
         burnDownLineData,
         burnDownDaysInMonth: daysInMonth
       })
-    } catch (error) {
+    } catch (_error) {
       setData({
         totalAccounts: 0,
         totalAssets: 0,
@@ -302,7 +296,14 @@ export default function DashboardPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- calculateUpcomingBills is defined below and stable; adding it would re-run effect every render
+  }, [])
+
+  useEffect(() => {
+    if (user && !userLoading) {
+      fetchDashboardData()
+    }
+  }, [user, userLoading, fetchDashboardData])
 
   /** True if bill was manually paid in the current period (month/year); past periods do not count as paid. */
   const isPaidThisPeriod = (bill: Bill) => {
@@ -386,7 +387,7 @@ export default function DashboardPage() {
       .filter(b => !b.isPaid) // Only show bills not yet paid this period (truly "upcoming")
       .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime()) // Soonest first
       .slice(0, 5)
-      .map(({ dueDate, ...bill }) => bill) // Remove dueDate from final result
+      .map(({ dueDate: _dueDate, ...bill }) => bill) // Remove dueDate from final result
   }
 
   if (userLoading || isLoading) {

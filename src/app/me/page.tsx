@@ -63,7 +63,7 @@ export default function MePage() {
         const error = await response.json()
         setPasswordError(error.error || 'Failed to update password')
       }
-    } catch (error) {
+    } catch (_error) {
       setPasswordError('Failed to update password')
     } finally {
       setIsSaving(false)

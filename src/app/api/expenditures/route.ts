@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
       data: expenditures,
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
     })
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: 'Failed to fetch expenditures' },
       { status: 500 }
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json(result)
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: 'Failed to create expenditure' },
       { status: 500 }

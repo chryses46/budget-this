@@ -20,7 +20,7 @@ export async function GET(
     })
 
     return NextResponse.json(transactions)
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: 'Failed to fetch account transactions' },
       { status: 500 }
@@ -87,7 +87,7 @@ export async function POST(
     })
 
     return NextResponse.json(result)
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: 'Failed to create account transaction' },
       { status: 500 }

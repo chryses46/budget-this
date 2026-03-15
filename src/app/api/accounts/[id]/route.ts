@@ -39,7 +39,7 @@ export async function PUT(
 
     decryptQueryResult(account)
     return NextResponse.json(account)
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: 'Failed to update account' },
       { status: 500 }
@@ -63,7 +63,7 @@ export async function DELETE(
     })
 
     return NextResponse.json({ message: 'Account deleted successfully' })
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: 'Failed to delete account' },
       { status: 500 }

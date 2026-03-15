@@ -69,7 +69,7 @@ export default function BudgetPage() {
       } else {
         setCategories([])
       }
-    } catch (error) {
+    } catch (_error) {
       setCategories([])
     } finally {
       setIsLoading(false)
@@ -108,7 +108,7 @@ export default function BudgetPage() {
       categoryForm.reset()
       setShowCategoryForm(false)
       setEditingCategory(null)
-    } catch (error) {
+    } catch (_error) {
     }
   }
 
@@ -130,7 +130,7 @@ export default function BudgetPage() {
         setCategories(categories.filter(cat => cat.id !== id))
       } else {
       }
-    } catch (error) {
+    } catch (_error) {
     }
   }
 
@@ -186,8 +186,8 @@ export default function BudgetPage() {
 
     const today = new Date()
     const currentDay = today.getDate()
-    const currentMonth = today.getMonth()
-    const currentYear = today.getFullYear()
+    const _currentMonth = today.getMonth()
+    const _currentYear = today.getFullYear()
     
     // For monthly bills, check if we're past the due day this month
     if (bill.frequency === 'Monthly') {

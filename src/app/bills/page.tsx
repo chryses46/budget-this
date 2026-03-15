@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useForm, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
@@ -72,7 +72,7 @@ export default function BillsPage() {
       } else {
         setBills([])
       }
-    } catch (error) {
+    } catch (_error) {
       setBills([])
     } finally {
       setIsLoading(false)
@@ -99,7 +99,7 @@ export default function BillsPage() {
       } else {
         setBudgetCategories([])
       }
-    } catch (error) {
+    } catch (_error) {
       setBudgetCategories([])
     }
   }
@@ -133,7 +133,7 @@ export default function BillsPage() {
       reset()
       setShowForm(false)
       setEditingBill(null)
-    } catch (error) {
+    } catch (_error) {
     }
   }
 
@@ -154,7 +154,7 @@ export default function BillsPage() {
       if (response.ok) {
         await fetchBills()
       }
-    } catch (error) {
+    } catch (_error) {
     }
   }
 
@@ -243,7 +243,7 @@ export default function BillsPage() {
         const error = await response.json()
         alert(error.error || 'Failed to pay bill')
       }
-    } catch (error) {
+    } catch (_error) {
       alert('Failed to pay bill')
     }
   }

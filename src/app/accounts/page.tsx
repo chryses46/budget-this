@@ -55,9 +55,12 @@ export default function AccountsPage() {
     resolver: zodResolver(accountSchema),
   })
 
-  const expenditureForm = useForm<ExpenditureInput>({
+  const expenditureForm = useForm({
     resolver: zodResolver(expenditureSchema),
     defaultValues: {
+      title: '',
+      amount: 0,
+      categoryId: '',
       accountId: '',
       createdAt: new Date().toISOString().slice(0, 10)
     }
@@ -82,7 +85,7 @@ export default function AccountsPage() {
       fetchAccounts()
       fetchCategories()
     }
-  }, [user, userLoading])
+  }, [user, userLoading, fetchCategories])
 
   const fetchAccounts = async () => {
     try {

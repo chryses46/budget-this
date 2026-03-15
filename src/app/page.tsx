@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { DollarSign, TrendingUp, PiggyBank, LogIn, Shield, Lock, BarChart3, CreditCard, ChevronDown } from 'lucide-react'
+import Image from 'next/image'
+import { TrendingUp, PiggyBank, LogIn, Shield, Lock, BarChart3, CreditCard, ChevronDown } from 'lucide-react'
 import { AuthModal } from '@/components/AuthModal'
 import { LoginFormContent } from '@/components/LoginFormContent'
 import { RegisterFormContent } from '@/components/RegisterFormContent'
@@ -59,11 +60,12 @@ export default function Home() {
                 className="absolute inset-0 transition-opacity duration-1000 ease-in-out"
                 style={{ opacity: i === heroIndex ? 1 : 0 }}
               >
-                {/* Plain img so background always visible; Next/Image can hide behind stacking */}
-                <img
+                <Image
                   src={src}
                   alt=""
-                  className="absolute inset-0 w-full h-full object-cover"
+                  fill
+                  className="object-cover"
+                  sizes="100vw"
                 />
               </div>
             ))}

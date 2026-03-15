@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+    const _body = await request.json()
     
     // TODO: Implement Plaid webhook verification
     // This would typically:
@@ -15,7 +14,7 @@ export async function POST(request: NextRequest) {
 
     // For now, just log the webhook and return success
     return NextResponse.json({ message: 'Webhook received' })
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: 'Failed to process webhook' },
       { status: 500 }
