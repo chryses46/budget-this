@@ -3,7 +3,7 @@ import { billSchema } from '@/lib/validations'
 import { prisma } from '@/lib/prisma'
 import { requireApiAuth } from '@/lib/api-auth'
 
-const FREQUENCY_VALUES = ['Monthly', 'Yearly'] as const
+const FREQUENCY_VALUES = ['Monthly', 'Yearly', 'Weekly'] as const
 
 export async function GET(request: NextRequest) {
   try {

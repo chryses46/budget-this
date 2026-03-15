@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { hashForLookup } from '@/lib/field-encryption'
+import { hashForLookup, normalizeEmailForLookup } from '@/lib/field-encryption'
 import { verifyPassword } from '@/lib/auth-utils'
 
 export async function POST(request: NextRequest) {
@@ -14,9 +14,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const normalizedEmail = normalizeEmailForLookup(email)
     // Find user by email hash
     const user = await prisma.user.findFirst({
-      where: { emailHash: hashForLookup(email) }
+      where: { emailHash: hashForLookup(normalizedEmail) }
     })
 
     if (!user) {

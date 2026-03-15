@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { accountSchema } from '@/lib/validations'
 import { prisma } from '@/lib/prisma'
+import { decryptQueryResult } from '@/lib/prisma-encryption-middleware'
 import { requireApiAuth } from '@/lib/api-auth'
 
 export async function GET(request: NextRequest) {
@@ -67,6 +68,7 @@ export async function POST(request: NextRequest) {
       }
     })
 
+    decryptQueryResult(account)
     return NextResponse.json(account)
   } catch (error) {
     return NextResponse.json(

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { hashForLookup } from '@/lib/field-encryption'
+import { hashForLookup, normalizeEmailForLookup } from '@/lib/field-encryption'
 import { sendPasswordResetEmail } from '@/lib/email'
 import crypto from 'crypto'
 
@@ -13,10 +13,11 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { email } = forgotPasswordSchema.parse(body)
+    const normalizedEmail = normalizeEmailForLookup(email)
 
     // Check if user exists (by email hash)
     const user = await prisma.user.findFirst({
-      where: { emailHash: hashForLookup(email) }
+      where: { emailHash: hashForLookup(normalizedEmail) }
     })
 
     if (!user) {
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
     // Send reset email
     const resetUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:8080'}/reset-password?token=${resetToken}`
     
-    await sendPasswordResetEmail(email, resetUrl)
+    await sendPasswordResetEmail(normalizedEmail, resetUrl)
 
     return NextResponse.json({
       message: 'If an account with that email exists, we sent a password reset link.'

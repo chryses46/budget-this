@@ -1,7 +1,7 @@
 import { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import { prisma } from '@/lib/prisma'
-import { hashForLookup } from './field-encryption'
+import { hashForLookup, normalizeEmailForLookup } from './field-encryption'
 import { verifyPassword, hashPassword, generateMfaCode } from './auth-utils'
 import { sendMfaCode, sendVerificationEmail } from './email'
 
@@ -22,9 +22,10 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
+        const normalizedEmail = normalizeEmailForLookup(credentials.email)
         // Find user by email hash (lookup field for encrypted email)
         const user = await prisma.user.findFirst({
-          where: { emailHash: hashForLookup(credentials.email) }
+          where: { emailHash: hashForLookup(normalizedEmail) }
         })
 
 

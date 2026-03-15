@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { hashForLookup } from '@/lib/field-encryption'
+import { hashForLookup, normalizeEmailForLookup } from '@/lib/field-encryption'
 import { generateMfaCode, sendMfaCode } from '@/lib/auth'
 
 const emailLoginSchema = z.object({
@@ -12,10 +12,11 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { email } = emailLoginSchema.parse(body)
+    const normalizedEmail = normalizeEmailForLookup(email)
 
     // Find user by email hash
     const user = await prisma.user.findFirst({
-      where: { emailHash: hashForLookup(email) }
+      where: { emailHash: hashForLookup(normalizedEmail) }
     })
 
     if (!user) {
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
     
     // Send MFA code via email
     try {
-      await sendMfaCode(email, mfaCode)
+      await sendMfaCode(normalizedEmail, mfaCode)
     } catch (emailError) {
       return NextResponse.json(
         { error: 'Failed to send verification code' },

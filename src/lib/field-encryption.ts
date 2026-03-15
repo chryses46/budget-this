@@ -67,7 +67,19 @@ export function isEncrypted(value: unknown): boolean {
 }
 
 /**
+ * Normalize email for consistent lookup hashing. SHA-256 is case-sensitive; without
+ * this, "User@Example.com" and "user@example.com" would produce different hashes.
+ */
+export function normalizeEmailForLookup(email: string): string {
+  if (email == null || typeof email !== 'string') {
+    throw new Error('normalizeEmailForLookup requires a string')
+  }
+  return email.toLowerCase().trim()
+}
+
+/**
  * SHA-256 hash for lookup fields (emailHash, tokenHash, codeHash). Hex string.
+ * For email lookups, normalize first: hashForLookup(normalizeEmailForLookup(email)).
  */
 export function hashForLookup(value: string): string {
   if (value == null || typeof value !== 'string') {

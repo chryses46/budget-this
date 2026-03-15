@@ -13,6 +13,7 @@ jest.mock('@/lib/prisma', () => ({
 jest.mock('@/lib/auth')
 jest.mock('@/lib/field-encryption', () => ({
   hashForLookup: jest.fn((s: string) => 'hash-' + s),
+  normalizeEmailForLookup: jest.fn((s: string) => s.toLowerCase().trim()),
 }))
 
 const mockPrisma = prisma as jest.Mocked<typeof prisma>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { expenditureSchema } from '@/lib/validations'
 import { prisma } from '@/lib/prisma'
+import { decryptQueryResult } from '@/lib/prisma-encryption-middleware'
 import { requireApiAuth } from '@/lib/api-auth'
 
 export async function GET(request: NextRequest) {
@@ -57,6 +58,7 @@ export async function GET(request: NextRequest) {
       prisma.expenditure.count({ where })
     ])
 
+    decryptQueryResult(expenditures)
     return NextResponse.json({
       data: expenditures,
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }

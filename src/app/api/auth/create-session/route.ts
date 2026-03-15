@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { normalizeEmailForLookup } from '@/lib/field-encryption'
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,8 +26,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verify email matches
-    if (user.email !== email) {
+    // Verify email matches (compare normalized to support any casing)
+    if (normalizeEmailForLookup(user.email) !== normalizeEmailForLookup(email)) {
       return NextResponse.json(
         { error: 'Email mismatch' },
         { status: 400 }

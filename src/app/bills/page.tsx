@@ -348,20 +348,8 @@ export default function BillsPage() {
         {/*Bill Total */}
         {filteredBills.length === 0 ? (
             <div className="text-center py-12">
-              <Calendar className="h-12 w-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+              
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">{bills.length === 0 ? 'No bills yet' : 'No matching bills'}</h3>
-              <p className="text-gray-500 dark:text-gray-400 mb-4">{bills.length === 0 ? 'Get started by adding your first bill' : 'Try a different search or filter'}</p>
-              <button
-                onClick={() => {
-                  setShowForm(true)
-                  // Scroll to top to show the form
-                  window.scrollTo({ top: 0, behavior: 'smooth' })
-                }}
-                className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center mx-auto"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Your First Bill
-              </button>
             </div>
           ) : (
           <div className="text-center bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6 flex flex-wrap gap-6">

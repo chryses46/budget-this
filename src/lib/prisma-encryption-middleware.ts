@@ -18,11 +18,14 @@ function isUserRecord(obj: Record<string, unknown>): boolean {
 }
 
 function isAccountRecord(obj: Record<string, unknown>): boolean {
+  // Full row has userId; nested select may only have id, name, type, balance
   return (
     typeof obj.name !== 'undefined' &&
     typeof obj.type !== 'undefined' &&
-    typeof obj.userId !== 'undefined' &&
-    (typeof obj.balance !== 'undefined' || typeof obj.plaidAccountId !== 'undefined')
+    (typeof obj.userId !== 'undefined' ||
+      typeof obj.balance !== 'undefined' ||
+      typeof obj.id !== 'undefined' ||
+      typeof obj.plaidAccountId !== 'undefined')
   )
 }
 
@@ -83,8 +86,20 @@ function walkAndDecrypt(value: unknown): void {
   }
 }
 
+/** Call before sending create/update result to client so UI gets decrypted values. */
+export function decryptQueryResult<T>(result: T): void {
+  walkAndDecrypt(result)
+}
+
 const WRITE_OPERATIONS = new Set(['create', 'update', 'updateMany', 'createMany'])
-const READ_OPERATIONS = new Set(['findUnique', 'findFirst', 'findMany'])
+// Decrypt results for any operation that returns record(s) with encrypted fields
+const DECRYPT_RESULT_OPERATIONS = new Set([
+  'findUnique',
+  'findFirst',
+  'findMany',
+  'create',  // create returns the new row (encrypted in DB)
+  'update', // update returns the updated row (encrypted in DB)
+])
 
 export function createEncryptionExtension() {
   return {
@@ -113,7 +128,7 @@ export function createEncryptionExtension() {
 
           const result = await query(args)
 
-          if (model && READ_OPERATIONS.has(operation)) {
+          if (model && ENCRYPTED_FIELDS[model] && DECRYPT_RESULT_OPERATIONS.has(operation)) {
             walkAndDecrypt(result)
           }
 
