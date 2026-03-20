@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useForm, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
@@ -72,19 +72,7 @@ export default function BillsPage() {
     defaultValues: { isAutopay: false },
   })
 
-  useEffect(() => {
-    if (user && !userLoading) {
-      fetchBills()
-      fetchBudgetCategories()
-      fetchAccounts()
-      if (!processAutopayRanRef.current) {
-        processAutopayRanRef.current = true
-        processAutopay()
-      }
-    }
-  }, [user, userLoading])
-
-  const fetchBills = async () => {
+  const fetchBills = useCallback(async () => {
     try {
       const response = await fetch('/api/bills')
       if (response.ok) {
@@ -99,9 +87,9 @@ export default function BillsPage() {
       setIsLoading(false)
       setIsInitialLoad(false)
     }
-  }
+  }, [])
 
-  const fetchAccounts = async () => {
+  const fetchAccounts = useCallback(async () => {
     try {
       const response = await fetch('/api/accounts')
       if (response.ok) {
@@ -113,28 +101,9 @@ export default function BillsPage() {
     } catch (_error) {
       setAccounts([])
     }
-  }
+  }, [])
 
-  const processAutopay = async () => {
-    try {
-      await fetch('/api/bills/process-autopay', { method: 'POST' })
-      await fetchBills()
-    } catch (_error) {
-      // Non-blocking; bills list still loads
-    }
-  }
-
-  const filteredBills = useMemo(() => {
-    return bills.filter((bill) => {
-      const matchesSearch = !searchQuery.trim() ||
-        bill.title.toLowerCase().includes(searchQuery.trim().toLowerCase())
-      const matchesType = !typeFilter || bill.frequency === typeFilter
-      const matchesAutopay = !filterAutopay || bill.isAutopay === filterAutopay
-      return matchesSearch && matchesType && matchesAutopay
-    })
-  }, [bills, searchQuery, typeFilter, filterAutopay])
-
-  const fetchBudgetCategories = async () => {
+  const fetchBudgetCategories = useCallback(async () => {
     try {
       const response = await fetch('/api/budget-categories')
       if (response.ok) {
@@ -146,7 +115,45 @@ export default function BillsPage() {
     } catch (_error) {
       setBudgetCategories([])
     }
-  }
+  }, [])
+
+  const processAutopay = useCallback(async () => {
+    try {
+      await fetch('/api/bills/process-autopay', { method: 'POST' })
+      await fetchBills()
+    } catch (_error) {
+      // Non-blocking; bills list still loads
+    }
+  }, [fetchBills])
+
+  useEffect(() => {
+    if (user && !userLoading) {
+      fetchBills()
+      fetchBudgetCategories()
+      fetchAccounts()
+      if (!processAutopayRanRef.current) {
+        processAutopayRanRef.current = true
+        void processAutopay()
+      }
+    }
+  }, [
+    user,
+    userLoading,
+    fetchBills,
+    fetchBudgetCategories,
+    fetchAccounts,
+    processAutopay,
+  ])
+
+  const filteredBills = useMemo(() => {
+    return bills.filter((bill) => {
+      const matchesSearch = !searchQuery.trim() ||
+        bill.title.toLowerCase().includes(searchQuery.trim().toLowerCase())
+      const matchesType = !typeFilter || bill.frequency === typeFilter
+      const matchesAutopay = !filterAutopay || bill.isAutopay === filterAutopay
+      return matchesSearch && matchesType && matchesAutopay
+    })
+  }, [bills, searchQuery, typeFilter, filterAutopay])
 
   const onSubmit = async (data: BillInput) => {
     try {
