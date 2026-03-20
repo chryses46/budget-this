@@ -138,6 +138,23 @@ describe('/api/accounts/[id]/transactions', () => {
       expect(data.error).toBe('Insufficient funds')
     })
 
+    it('returns 400 when body fails validation', async () => {
+      const req = {
+        json: jest.fn().mockResolvedValue({
+          type: 'invalid',
+          amount: -5,
+          description: '',
+        }),
+      } as unknown as NextRequest
+
+      const res = await POST(req, { params: params() })
+      const data = await res.json()
+
+      expect(res.status).toBe(400)
+      expect(data.error).toBeDefined()
+      expect(mockPrisma.account.findFirst).not.toHaveBeenCalled()
+    })
+
     it('returns 500 on server error', async () => {
       mockPrisma.account.findFirst.mockRejectedValue(new Error('db error'))
       const req = {

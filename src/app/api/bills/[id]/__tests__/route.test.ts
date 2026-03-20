@@ -8,6 +8,7 @@ jest.mock('@/lib/api-auth', () => ({ requireApiAuth: jest.fn() }))
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     bill: { update: jest.fn(), delete: jest.fn() },
+    account: { findFirst: jest.fn() },
   },
 }))
 
@@ -46,13 +47,16 @@ describe('/api/bills/[id]', () => {
       )
     })
 
-    it('updates bill with multiple optional fields', async () => {
+    it('updates bill with multiple optional fields including accountId', async () => {
+      const accountId = 'a1b2c3d4-e5f6-4789-a012-345678901234'
+      mockPrisma.account.findFirst.mockResolvedValue({ id: accountId } as any)
       mockPrisma.bill.update.mockResolvedValue({
         id: 'bill-1',
         amount: 200,
         dayDue: 20,
         frequency: 'Yearly',
         isAutopay: true,
+        accountId,
         userId: 'user-1',
       } as any)
 
@@ -62,6 +66,7 @@ describe('/api/bills/[id]', () => {
           dayDue: 20,
           frequency: 'Yearly',
           budgetCategoryId: 'cat-1',
+          accountId,
           isAutopay: true,
         }),
       } as unknown as NextRequest
@@ -75,10 +80,29 @@ describe('/api/bills/[id]', () => {
             dayDue: 20,
             frequency: 'Yearly',
             budgetCategoryId: 'cat-1',
+            accountId,
             isAutopay: true,
           }),
         })
       )
+    })
+
+    it('returns 400 when accountId is not owned by user', async () => {
+      mockPrisma.account.findFirst.mockResolvedValue(null)
+      const otherAccountId = 'b2c3d4e5-f6a7-4789-b012-345678901235'
+
+      const req = {
+        json: jest.fn().mockResolvedValue({
+          accountId: otherAccountId,
+        }),
+      } as unknown as NextRequest
+
+      const res = await PUT(req, { params: params() })
+      const data = await res.json()
+
+      expect(res.status).toBe(400)
+      expect(data.error).toBe('Account not found or access denied')
+      expect(mockPrisma.bill.update).not.toHaveBeenCalled()
     })
 
     it('returns 401 when not authenticated', async () => {

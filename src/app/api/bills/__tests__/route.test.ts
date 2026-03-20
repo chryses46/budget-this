@@ -8,6 +8,7 @@ jest.mock('@/lib/api-auth', () => ({ requireApiAuth: jest.fn() }))
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     bill: { findMany: jest.fn(), create: jest.fn() },
+    account: { findFirst: jest.fn() },
   },
 }))
 
@@ -102,7 +103,9 @@ describe('/api/bills', () => {
   })
 
   describe('POST', () => {
-    it('creates bill successfully', async () => {
+    it('creates bill successfully with default account when accountId not provided', async () => {
+      const mainAccId = '00000000-0000-4000-8000-000000000001'
+      mockPrisma.account.findFirst.mockResolvedValue({ id: mainAccId } as any)
       mockPrisma.bill.create.mockResolvedValue({
         id: 'bill-1',
         title: 'Rent',
@@ -110,6 +113,7 @@ describe('/api/bills', () => {
         dayDue: 1,
         frequency: 'Monthly',
         userId: 'user-1',
+        accountId: mainAccId,
       } as any)
 
       const req = {
@@ -126,7 +130,53 @@ describe('/api/bills', () => {
 
       expect(res.status).toBe(200)
       expect(data.title).toBe('Rent')
-      expect(mockPrisma.bill.create).toHaveBeenCalled()
+      expect(mockPrisma.account.findFirst).toHaveBeenCalledWith({
+        where: { userId: 'user-1', isMain: true },
+        select: { id: true },
+      })
+      expect(mockPrisma.bill.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          title: 'Rent',
+          amount: 1000,
+          dayDue: 1,
+          frequency: 'Monthly',
+          accountId: mainAccId,
+          userId: 'user-1',
+        }),
+      })
+    })
+
+    it('creates bill with provided accountId when user owns account', async () => {
+      const accountId = 'a1b2c3d4-e5f6-4789-a012-345678901234'
+      mockPrisma.account.findFirst.mockResolvedValue({ id: accountId } as any)
+      mockPrisma.bill.create.mockResolvedValue({
+        id: 'bill-1',
+        title: 'Rent',
+        amount: 1000,
+        dayDue: 1,
+        frequency: 'Monthly',
+        userId: 'user-1',
+        accountId,
+      } as any)
+
+      const req = {
+        json: jest.fn().mockResolvedValue({
+          title: 'Rent',
+          amount: 1000,
+          dayDue: 1,
+          frequency: 'Monthly',
+          accountId,
+        }),
+      } as unknown as NextRequest
+
+      const res = await POST(req)
+      const data = await res.json()
+      expect(res.status).toBe(200)
+      expect(mockPrisma.bill.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          accountId,
+        }),
+      })
     })
 
     it('returns 500 on validation error', async () => {

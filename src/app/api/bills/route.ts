@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { billSchema } from '@/lib/validations'
 import { prisma } from '@/lib/prisma'
+import { decryptQueryResult } from '@/lib/prisma-encryption-middleware'
 import { requireApiAuth } from '@/lib/api-auth'
 
 const FREQUENCY_VALUES = ['Monthly', 'Yearly', 'Weekly'] as const
@@ -44,11 +45,20 @@ export async function GET(request: NextRequest) {
             title: true,
             limit: true
           }
+        },
+        account: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            isMain: true
+          }
         }
       },
       orderBy: { dayDue: 'asc' }
     })
 
+    decryptQueryResult(bills)
     return NextResponse.json(bills)
   } catch (_error) {
     return NextResponse.json(
@@ -65,7 +75,22 @@ export async function POST(request: NextRequest) {
     const { userId } = auth
 
     const body = await request.json()
-    const { title, amount, dayDue, frequency, budgetCategoryId, isAutopay } = billSchema.parse(body)
+    const { title, amount, dayDue, frequency, budgetCategoryId, accountId: bodyAccountId, isAutopay } = billSchema.parse(body)
+
+    let accountId: string | null = bodyAccountId ?? null
+    if (!accountId) {
+      const mainAccount = await prisma.account.findFirst({
+        where: { userId, isMain: true },
+        select: { id: true }
+      })
+      accountId = mainAccount?.id ?? null
+    } else {
+      const owned = await prisma.account.findFirst({
+        where: { id: accountId, userId },
+        select: { id: true }
+      })
+      if (!owned) accountId = null
+    }
 
     const bill = await prisma.bill.create({
       data: {
@@ -74,6 +99,7 @@ export async function POST(request: NextRequest) {
         dayDue,
         frequency,
         budgetCategoryId,
+        accountId,
         isAutopay: isAutopay ?? false,
         userId
       }

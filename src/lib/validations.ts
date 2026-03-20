@@ -28,6 +28,10 @@ export const billSchema = z.object({
   dayDue: z.number().min(1).max(31, 'Day due must be between 1 and 31'),
   frequency: z.enum(['Weekly', 'Monthly', 'Yearly']),
   budgetCategoryId: z.string().optional(),
+  accountId: z
+    .union([z.string().uuid(), z.literal('')])
+    .optional()
+    .transform((v) => (v === '' ? undefined : v)),
   isAutopay: z.boolean().optional().default(false),
 })
 
