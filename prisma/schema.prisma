@@ -60,6 +60,8 @@ model Bill {
   frequency        Frequency
   budgetCategoryId String?
   budgetCategory   BudgetCategory? @relation(fields: [budgetCategoryId], references: [id], onDelete: SetNull)
+  accountId        String?
+  account          Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
   isPaid           Boolean   @default(false)
   paidAt           DateTime?
   isAutopay        Boolean   @default(false)
@@ -149,6 +151,7 @@ model Account {
   accountTransactions AccountTransaction[]
   budgetCategories    BudgetCategory[]
   expenditures        Expenditure[]
+  bills               Bill[]
 
   @@map("accounts")
 }

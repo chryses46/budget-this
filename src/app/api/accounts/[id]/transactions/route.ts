@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { accountTransactionSchema } from '@/lib/validations'
 import { prisma, type TransactionClient } from '@/lib/prisma'
 import { requireApiAuth } from '@/lib/api-auth'
@@ -87,7 +88,14 @@ export async function POST(
     })
 
     return NextResponse.json(result)
-  } catch (_error) {
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      const message = error.issues.map((issue: { message: string }) => issue.message).join('; ') || 'Validation failed'
+      return NextResponse.json(
+        { error: message },
+        { status: 400 }
+      )
+    }
     return NextResponse.json(
       { error: 'Failed to create account transaction' },
       { status: 500 }

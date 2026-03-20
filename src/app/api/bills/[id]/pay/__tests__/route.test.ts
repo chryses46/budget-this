@@ -30,26 +30,25 @@ describe('/api/bills/[id]/pay', () => {
     mockRequireApiAuth.mockResolvedValue({ userId: 'user-1' })
   })
 
-  it('marks bill as paid successfully', async () => {
+  it('returns 400 when bill has no accountId', async () => {
     mockPrisma.bill.findFirst.mockResolvedValue({
       id: 'bill-1',
       userId: 'user-1',
       amount: 100,
       title: 'Rent',
       isPaid: false,
-      budgetCategory: { accountId: null },
+      accountId: null,
     } as any)
 
     const res = await POST({} as NextRequest, { params: params() })
     const data = await res.json()
 
-    expect(res.status).toBe(200)
-    expect(data.message).toBe('Bill paid successfully')
-    expect(data.bill).toBeDefined()
-    expect(mockPrisma.$transaction).toHaveBeenCalled()
+    expect(res.status).toBe(400)
+    expect(data.error).toBe('Assign an account to this bill before paying.')
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled()
   })
 
-  it('creates account transaction when bill category has accountId', async () => {
+  it('marks bill as paid successfully and creates account transaction when bill has accountId', async () => {
     const mockTx = {
       bill: { update: jest.fn().mockResolvedValue({ id: 'bill-1', isPaid: true }) },
       accountTransaction: { create: jest.fn().mockResolvedValue({}) },
@@ -62,18 +61,21 @@ describe('/api/bills/[id]/pay', () => {
       amount: 50,
       title: 'Sub',
       isPaid: false,
-      budgetCategory: { accountId: 'acc-1' },
+      accountId: 'acc-1',
     } as any)
 
     const res = await POST({} as NextRequest, { params: params() })
     const data = await res.json()
 
     expect(res.status).toBe(200)
+    expect(data.message).toBe('Bill paid successfully')
+    expect(data.bill).toBeDefined()
     expect(mockTx.accountTransaction.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         accountId: 'acc-1',
         type: 'withdrawal',
         amount: 50,
+        description: 'Bill Payment: Sub',
       }),
     })
     expect(mockTx.account.update).toHaveBeenCalledWith({

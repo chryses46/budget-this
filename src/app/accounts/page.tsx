@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
-import { accountSchema, expenditureSchema, AccountInput, ExpenditureInput } from '@/lib/validations'
+import { accountSchema, expenditureSchema, accountTransactionSchema, AccountInput, ExpenditureInput, AccountTransactionInput } from '@/lib/validations'
 import { cn } from '@/lib/utils'
-import { Plus, Edit, Trash2, DollarSign, CreditCard, TrendingDown, Star } from 'lucide-react'
+import { Plus, Edit, Trash2, DollarSign, CreditCard, TrendingDown, Star, ArrowDownCircle, ArrowUpCircle } from 'lucide-react'
 import { Navigation } from '@/components/Navigation'
 import { useUser } from '@/contexts/UserContext'
 
@@ -46,9 +46,13 @@ export default function AccountsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [showAccountForm, setShowAccountForm] = useState(false)
   const [showExpenditureForm, setShowExpenditureForm] = useState(false)
+  const [showTransactionForm, setShowTransactionForm] = useState(false)
+  const [transactionAccount, setTransactionAccount] = useState<Account | null>(null)
+  const [transactionType, setTransactionType] = useState<'deposit' | 'withdrawal'>('deposit')
   const [editingAccount, setEditingAccount] = useState<Account | null>(null)
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null)
   const [isSubmittingAccount, setIsSubmittingAccount] = useState(false)
+  const [isSubmittingTransaction, setIsSubmittingTransaction] = useState(false)
   const [categories, setCategories] = useState<BudgetCategory[]>([])
 
   const accountForm = useForm({
@@ -64,6 +68,15 @@ export default function AccountsPage() {
       accountId: '',
       createdAt: new Date().toISOString().slice(0, 10)
     }
+  })
+
+  const transactionForm = useForm<AccountTransactionInput>({
+    resolver: zodResolver(accountTransactionSchema),
+    defaultValues: {
+      type: 'deposit',
+      amount: 0,
+      description: '',
+    },
   })
 
   const fetchCategories = useCallback(async () => {
@@ -217,6 +230,48 @@ export default function AccountsPage() {
     })
     setShowExpenditureForm(true)
     window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleDeposit = (account: Account) => {
+    setTransactionAccount(account)
+    setTransactionType('deposit')
+    transactionForm.reset({ type: 'deposit', amount: 0, description: '' })
+    setShowTransactionForm(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleWithdraw = (account: Account) => {
+    setTransactionAccount(account)
+    setTransactionType('withdrawal')
+    transactionForm.reset({ type: 'withdrawal', amount: 0, description: '' })
+    setShowTransactionForm(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const onTransactionSubmit = async (data: AccountTransactionInput) => {
+    if (!transactionAccount) return
+    setIsSubmittingTransaction(true)
+    try {
+      const response = await fetch(`/api/accounts/${transactionAccount.id}/transactions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: transactionType, amount: data.amount, description: data.description }),
+      })
+      if (response.ok) {
+        await fetchAccounts()
+        transactionForm.reset({ type: transactionType, amount: 0, description: '' })
+        setShowTransactionForm(false)
+        setTransactionAccount(null)
+      } else {
+        const err = await response.json().catch(() => ({}))
+        alert(err?.error ?? 'Failed to create transaction')
+      }
+    } catch (e) {
+      console.error(e)
+      alert('Failed to create transaction. Please try again.')
+    } finally {
+      setIsSubmittingTransaction(false)
+    }
   }
 
   const expenditureCategories = categories
@@ -512,6 +567,86 @@ export default function AccountsPage() {
           </div>
         )}
 
+        {/* Deposit / Withdraw form */}
+        {showTransactionForm && transactionAccount && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+            <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+              {transactionType === 'deposit' ? 'Deposit to' : 'Withdraw from'} – {transactionAccount.name}
+            </h2>
+            <form onSubmit={transactionForm.handleSubmit(onTransactionSubmit)} className="space-y-4">
+              <input type="hidden" {...transactionForm.register('type')} />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="tx-amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Amount
+                  </label>
+                  <div className="mt-1 relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <DollarSign className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+                    </div>
+                    <input
+                      {...transactionForm.register('amount', { valueAsNumber: true })}
+                      id="tx-amount"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className={cn(
+                        'block w-full pl-10 pr-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                        transactionForm.formState.errors.amount ? 'border-red-300 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+                      )}
+                    />
+                  </div>
+                  {transactionForm.formState.errors.amount && (
+                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{transactionForm.formState.errors.amount.message}</p>
+                  )}
+                </div>
+                <div>
+                  <label htmlFor="tx-description" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Description
+                  </label>
+                  <input
+                    {...transactionForm.register('description')}
+                    id="tx-description"
+                    type="text"
+                    className={cn(
+                      'mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                      transactionForm.formState.errors.description ? 'border-red-300 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+                    )}
+                  />
+                  {transactionForm.formState.errors.description && (
+                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{transactionForm.formState.errors.description.message}</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    transactionForm.reset()
+                    setShowTransactionForm(false)
+                    setTransactionAccount(null)
+                  }}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingTransaction}
+                  className={cn(
+                    'px-4 py-2 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed',
+                    transactionType === 'deposit'
+                      ? 'bg-green-600 hover:bg-green-700'
+                      : 'bg-amber-600 hover:bg-amber-700'
+                  )}
+                >
+                  {isSubmittingTransaction ? 'Submitting…' : transactionType === 'deposit' ? 'Deposit' : 'Withdraw'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
         {/* Accounts List */}
         {accounts.length === 0 ? (
           <div className="text-center py-12">
@@ -567,8 +702,22 @@ export default function AccountsPage() {
 
                 <div className="space-y-2">
                   <button
-                    onClick={() => handleAddExpenditure(account)}
+                    onClick={() => handleDeposit(account)}
                     className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 flex items-center justify-center"
+                  >
+                    <ArrowDownCircle className="h-4 w-4 mr-2" />
+                    Deposit
+                  </button>
+                  <button
+                    onClick={() => handleWithdraw(account)}
+                    className="w-full bg-amber-600 text-white py-2 px-4 rounded-md hover:bg-amber-700 flex items-center justify-center"
+                  >
+                    <ArrowUpCircle className="h-4 w-4 mr-2" />
+                    Withdraw
+                  </button>
+                  <button
+                    onClick={() => handleAddExpenditure(account)}
+                    className="w-full border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-2 px-4 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center justify-center"
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Add Expenditure
@@ -576,13 +725,13 @@ export default function AccountsPage() {
                   
                   {account.accountTransactions && account.accountTransactions.length > 0 && (
                     <div className="mt-4">
-                      <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Recent Expenditures</h4>
+                      <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Recent activity</h4>
                       <div className="space-y-1">
                         {account.accountTransactions?.slice(0, 3).map((transaction) => {
                           const label = transaction.description.replace(/^Expenditure:\s*/i, '').trim() || transaction.description
                           return (
-                            <div key={transaction.id} className="flex items-center justify-between text-sm">
-                              <div className="flex items-center space-x-2">
+                            <div key={transaction.id} className="flex items-center justify-between gap-2 text-sm min-w-0">
+                              <div className="flex items-center space-x-2 min-w-0 overflow-hidden">
                                 {transaction.type === 'deposit' ? null : (
                                   <TrendingDown className="h-3 w-3 text-red-500 flex-shrink-0" />
                                 )}

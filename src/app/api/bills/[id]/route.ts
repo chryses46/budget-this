@@ -16,6 +16,20 @@ export async function PUT(
     const body = await request.json()
     const parsed = updateBillSchema.parse(body)
 
+    let accountIdUpdate: string | null | undefined = parsed.accountId
+    if (accountIdUpdate !== undefined && accountIdUpdate !== null) {
+      const owned = await prisma.account.findFirst({
+        where: { id: accountIdUpdate, userId },
+        select: { id: true }
+      })
+      if (!owned) {
+        return NextResponse.json(
+          { error: 'Account not found or access denied' },
+          { status: 400 }
+        )
+      }
+    }
+
     const bill = await prisma.bill.update({
       where: { id, userId },
       data: {
@@ -24,6 +38,7 @@ export async function PUT(
         ...(parsed.dayDue !== undefined && { dayDue: parsed.dayDue }),
         ...(parsed.frequency !== undefined && { frequency: parsed.frequency }),
         ...(parsed.budgetCategoryId !== undefined && { budgetCategoryId: parsed.budgetCategoryId }),
+        ...(parsed.accountId !== undefined && { accountId: parsed.accountId }),
         ...(parsed.isAutopay !== undefined && { isAutopay: parsed.isAutopay }),
       }
     })

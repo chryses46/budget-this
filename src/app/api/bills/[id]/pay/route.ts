@@ -13,16 +13,8 @@ export async function POST(
 
     const { id } = await params
 
-    // Get the bill with its budget category
     const bill = await prisma.bill.findFirst({
-      where: { id, userId },
-      include: {
-        budgetCategory: {
-          select: {
-            accountId: true
-          }
-        }
-      }
+      where: { id, userId }
     })
 
     if (!bill) {
@@ -39,9 +31,16 @@ export async function POST(
       )
     }
 
-    // Use transaction to ensure bill payment and account transaction are created together
+    if (!bill.accountId) {
+      return NextResponse.json(
+        { error: 'Assign an account to this bill before paying.' },
+        { status: 400 }
+      )
+    }
+
+    const accountId = bill.accountId
+
     const updatedBill = await prisma.$transaction(async (tx: TransactionClient) => {
-      // Mark the bill as paid
       const paidBill = await tx.bill.update({
         where: { id },
         data: {
@@ -50,29 +49,24 @@ export async function POST(
         }
       })
 
-      // If the bill's budget category is linked to an account, create a withdrawal transaction
-      if (bill.budgetCategory?.accountId) {
-        // Create account transaction
-        await tx.accountTransaction.create({
-          data: {
-            accountId: bill.budgetCategory.accountId,
-            type: 'withdrawal',
-            amount: bill.amount,
-            description: `Bill Payment: ${bill.title}`,
-            userId
-          }
-        })
+      await tx.accountTransaction.create({
+        data: {
+          accountId,
+          type: 'withdrawal',
+          amount: bill.amount,
+          description: `Bill Payment: ${bill.title}`,
+          userId
+        }
+      })
 
-        // Update account balance
-        await tx.account.update({
-          where: { id: bill.budgetCategory.accountId },
-          data: {
-            balance: {
-              decrement: bill.amount
-            }
+      await tx.account.update({
+        where: { id: accountId },
+        data: {
+          balance: {
+            decrement: bill.amount
           }
-        })
-      }
+        }
+      })
 
       return paidBill
     })

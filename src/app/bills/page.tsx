@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useForm, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
@@ -22,6 +22,13 @@ interface Bill {
     title: string
     limit: number
   }
+  accountId?: string | null
+  account?: {
+    id: string
+    name: string
+    type?: string
+    isMain?: boolean
+  } | null
   isPaid: boolean
   paidAt?: string
   isAutopay?: boolean
@@ -35,10 +42,18 @@ interface BudgetCategory {
   limit: number
 }
 
+interface Account {
+  id: string
+  name: string
+  type: string
+  isMain: boolean
+}
+
 export default function BillsPage() {
   const { user, isLoading: userLoading } = useUser()
   const [bills, setBills] = useState<Bill[]>([])
   const [budgetCategories, setBudgetCategories] = useState<BudgetCategory[]>([])
+  const [accounts, setAccounts] = useState<Account[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingBill, setEditingBill] = useState<Bill | null>(null)
@@ -46,6 +61,7 @@ export default function BillsPage() {
   const [typeFilter, setTypeFilter] = useState<string>('')
   const [isInitialLoad, setIsInitialLoad] = useState(true)
   const [filterAutopay, setFilterAutopay] = useState(false)
+  const processAutopayRanRef = useRef(false)
   const {
     register,
     handleSubmit,
@@ -60,6 +76,11 @@ export default function BillsPage() {
     if (user && !userLoading) {
       fetchBills()
       fetchBudgetCategories()
+      fetchAccounts()
+      if (!processAutopayRanRef.current) {
+        processAutopayRanRef.current = true
+        processAutopay()
+      }
     }
   }, [user, userLoading])
 
@@ -77,6 +98,29 @@ export default function BillsPage() {
     } finally {
       setIsLoading(false)
       setIsInitialLoad(false)
+    }
+  }
+
+  const fetchAccounts = async () => {
+    try {
+      const response = await fetch('/api/accounts')
+      if (response.ok) {
+        const data = await response.json()
+        setAccounts(data)
+      } else {
+        setAccounts([])
+      }
+    } catch (_error) {
+      setAccounts([])
+    }
+  }
+
+  const processAutopay = async () => {
+    try {
+      await fetch('/api/bills/process-autopay', { method: 'POST' })
+      await fetchBills()
+    } catch (_error) {
+      // Non-blocking; bills list still loads
     }
   }
 
@@ -139,9 +183,11 @@ export default function BillsPage() {
 
   const handleEdit = (bill: Bill) => {
     setEditingBill(bill)
-    reset(bill)
+    reset({
+      ...bill,
+      accountId: bill.accountId ?? undefined,
+    })
     setShowForm(true)
-    // Scroll to top of the page to show the edit form
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -185,21 +231,7 @@ export default function BillsPage() {
     return false
   }
 
-  /** True if bill was manually paid in the current period (month/year); past periods do not count as paid. */
-  const isPaidThisPeriod = (bill: Bill) => {
-    if (!bill.isPaid || !bill.paidAt) return false
-    const today = new Date()
-    const paidAt = new Date(bill.paidAt)
-    if (bill.frequency === 'Monthly' || bill.frequency === 'Weekly') {
-      return paidAt.getMonth() === today.getMonth() && paidAt.getFullYear() === today.getFullYear()
-    }
-    if (bill.frequency === 'Yearly') {
-      return paidAt.getFullYear() === today.getFullYear()
-    }
-    return false
-  }
-
-  const displayAsPaid = (bill: Bill) => isPaidThisPeriod(bill) || isAutopayDue(bill)
+  const displayAsPaid = (bill: Bill) => bill.isPaid || isAutopayDue(bill)
 
   const isBillLate = (bill: Bill) => {
     if (displayAsPaid(bill)) return false
@@ -222,8 +254,8 @@ export default function BillsPage() {
   }
 
   const handlePayBill = async (bill: Bill) => {
-    if (!bill.budgetCategoryId) {
-      alert('This bill must be assigned to a budget category before it can be paid.')
+    if (!bill.accountId) {
+      alert('This bill must be assigned to an account before it can be paid.')
       return
     }
 
@@ -477,6 +509,31 @@ export default function BillsPage() {
                   )}
                 </div>
 
+                <div>
+                  <label htmlFor="accountId" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Account
+                  </label>
+                  <select
+                    {...register('accountId')}
+                    className={cn(
+                      'mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                      errors.accountId ? 'border-red-300 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+                    )}
+                  >
+                    <option value="">
+                      {accounts.find((a) => a.isMain) ? 'Primary account' : accounts.length ? 'Select account' : 'No accounts'}
+                    </option>
+                    {accounts.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} ({acc.type}){acc.isMain ? ' – Primary' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.accountId && (
+                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.accountId.message}</p>
+                  )}
+                </div>
+
                 <div className="flex items-center">
                   <input
                     {...register('isAutopay')}
@@ -560,6 +617,11 @@ export default function BillsPage() {
                           <span className="px-2 py-1 bg-gray-100 dark:bg-gray-600 rounded-full text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
                             {bill.frequency}
                           </span>
+                          {bill.account && (
+                            <span className="px-2 py-1 bg-purple-100 dark:bg-purple-600 rounded-full text-xs text-purple-700 dark:text-purple-300 whitespace-nowrap">
+                              {bill.account.name}
+                            </span>
+                          )}
                           {bill.budgetCategory && (
                             <span className="px-2 py-1 bg-blue-100 dark:bg-blue-600 rounded-full text-xs text-blue-700 dark:text-blue-300 whitespace-nowrap">
                               {bill.budgetCategory.title}
@@ -584,7 +646,7 @@ export default function BillsPage() {
                       </div>
                     </div>
                     <div className="flex items-center justify-end sm:justify-start space-x-2 flex-shrink-0">
-                      {bill.budgetCategoryId && !bill.isPaid && !bill.isAutopay && !displayAsPaid(bill) && (
+                      {bill.accountId && !bill.isPaid && !bill.isAutopay && !displayAsPaid(bill) && (
                         <button
                           onClick={() => handlePayBill(bill)}
                           className="p-2 text-gray-400 dark:text-gray-500 hover:text-green-600 dark:hover:text-green-400"
