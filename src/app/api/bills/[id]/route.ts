@@ -16,7 +16,7 @@ export async function PUT(
     const body = await request.json()
     const parsed = updateBillSchema.parse(body)
 
-    let accountIdUpdate: string | null | undefined = parsed.accountId
+    const accountIdUpdate: string | null | undefined = parsed.accountId
     if (accountIdUpdate !== undefined && accountIdUpdate !== null) {
       const owned = await prisma.account.findFirst({
         where: { id: accountIdUpdate, userId },
