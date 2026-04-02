@@ -9,6 +9,7 @@ import { Search, Receipt, ChevronLeft, ChevronRight, Plus, DollarSign, Edit, Tra
 import { Navigation } from '@/components/Navigation'
 import { useUser } from '@/contexts/UserContext'
 import { expenditureSchema, ExpenditureInput } from '@/lib/validations'
+import { roundUpSpareCents } from '@/lib/roundup'
 import { cn } from '@/lib/utils'
 
 interface Expenditure {
@@ -34,6 +35,8 @@ interface Account {
   type: string
   balance: number
   isMain?: boolean
+  roundUpOnExpenditure?: boolean
+  doesRoundupSave?: boolean
 }
 
 const PAGE_SIZE = 20
@@ -53,6 +56,7 @@ function ExpendituresContent() {
   const [page, setPage] = useState(() => Math.max(1, parseInt(searchParams.get('page') ?? '1', 10)))
   const [showExpenditureForm, setShowExpenditureForm] = useState(false)
   const [editingExpenditure, setEditingExpenditure] = useState<Expenditure | null>(null)
+  const [roundupSavingsAccountId, setRoundupSavingsAccountId] = useState<string | null>(null)
 
   const expenditureForm = useForm<ExpenditureInput>({
     resolver: zodResolver(expenditureSchema) as Resolver<ExpenditureInput>,
@@ -90,6 +94,20 @@ function ExpendituresContent() {
     }
   }, [])
 
+  const fetchRoundupSettings = useCallback(async () => {
+    try {
+      const response = await fetch('/api/user/roundup-settings')
+      if (response.ok) {
+        const data = await response.json()
+        setRoundupSavingsAccountId(data.roundupSavingsAccountId ?? null)
+      } else {
+        setRoundupSavingsAccountId(null)
+      }
+    } catch {
+      setRoundupSavingsAccountId(null)
+    }
+  }, [])
+
   const fetchExpenditures = useCallback(async () => {
     if (!user) return
     setIsLoading(true)
@@ -122,8 +140,9 @@ function ExpendituresContent() {
     if (user && !userLoading) {
       fetchCategories()
       fetchAccounts()
+      fetchRoundupSettings()
     }
-  }, [user, userLoading, fetchCategories, fetchAccounts])
+  }, [user, userLoading, fetchCategories, fetchAccounts, fetchRoundupSettings])
 
   useEffect(() => {
     if (user && !userLoading) {
@@ -242,6 +261,22 @@ function ExpendituresContent() {
       </div>
     )
   }
+
+  const watchedAccountId = expenditureForm.watch('accountId')
+  const watchedAmount = expenditureForm.watch('amount')
+  const primaryAccount = accounts.find((a) => a.isMain)
+  const effectiveSpendAccount =
+    accounts.find((a) => a.id === (watchedAccountId || '')) ?? primaryAccount ?? null
+  const spare =
+    typeof watchedAmount === 'number' && watchedAmount > 0 ? roundUpSpareCents(watchedAmount) : 0
+  const savingsName = accounts.find((a) => a.id === roundupSavingsAccountId)?.name ?? 'savings'
+  const roundupSourceAccount = accounts.find((a) => a.doesRoundupSave) ?? effectiveSpendAccount
+  const showRoundupHint =
+    !editingExpenditure &&
+    showExpenditureForm &&
+    Boolean(effectiveSpendAccount?.roundUpOnExpenditure) &&
+    Boolean(roundupSavingsAccountId) &&
+    spare > 0
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -382,6 +417,12 @@ function ExpendituresContent() {
                     <p className="mt-1 text-sm text-red-600 dark:text-red-400">{expenditureForm.formState.errors.accountId.message}</p>
                   )}
                 </div>
+                {showRoundupHint && (
+                  <p className="md:col-span-2 text-sm text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-md px-3 py-2">
+                    Round-up: an extra ${spare.toFixed(2)} will move to {savingsName} (debited from{' '}
+                    {roundupSourceAccount?.name ?? 'the spending account'}).
+                  </p>
+                )}
               </div>
               <div className="flex justify-end space-x-3">
                 <button

@@ -4,9 +4,29 @@ import { useState, useEffect, useCallback } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
-import { accountSchema, expenditureSchema, accountTransactionSchema, AccountInput, ExpenditureInput, AccountTransactionInput } from '@/lib/validations'
+import {
+  accountSchema,
+  expenditureSchema,
+  accountTransactionSchema,
+  accountTransferSchema,
+  AccountInput,
+  ExpenditureInput,
+  AccountTransactionInput,
+  AccountTransferInput,
+} from '@/lib/validations'
 import { cn } from '@/lib/utils'
-import { Plus, Edit, Trash2, DollarSign, CreditCard, TrendingDown, Star, ArrowDownCircle, ArrowUpCircle } from 'lucide-react'
+import {
+  Plus,
+  Edit,
+  Trash2,
+  DollarSign,
+  CreditCard,
+  TrendingDown,
+  Star,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  ArrowLeftRight,
+} from 'lucide-react'
 import { Navigation } from '@/components/Navigation'
 import { useUser } from '@/contexts/UserContext'
 
@@ -19,6 +39,8 @@ interface Account {
   institutionId?: string
   balance: number
   isMain: boolean
+  roundUpOnExpenditure?: boolean
+  doesRoundupSave?: boolean
   createdAt: string
   updatedAt: string
   accountTransactions: AccountTransaction[]
@@ -27,9 +49,11 @@ interface Account {
 
 interface AccountTransaction {
   id: string
-  type: 'deposit' | 'withdrawal'
+  type: 'deposit' | 'withdrawal' | 'transfer_out' | 'transfer_in'
   amount: number
   description: string
+  counterpartyAccountId?: string | null
+  transferPairId?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -47,16 +71,25 @@ export default function AccountsPage() {
   const [showAccountForm, setShowAccountForm] = useState(false)
   const [showExpenditureForm, setShowExpenditureForm] = useState(false)
   const [showTransactionForm, setShowTransactionForm] = useState(false)
-  const [transactionAccount, setTransactionAccount] = useState<Account | null>(null)
+  const [showTransferForm, setShowTransferForm] = useState(false)
+  const [transactionTargetAccountId, setTransactionTargetAccountId] = useState('')
   const [transactionType, setTransactionType] = useState<'deposit' | 'withdrawal'>('deposit')
   const [editingAccount, setEditingAccount] = useState<Account | null>(null)
-  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null)
   const [isSubmittingAccount, setIsSubmittingAccount] = useState(false)
   const [isSubmittingTransaction, setIsSubmittingTransaction] = useState(false)
+  const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false)
   const [categories, setCategories] = useState<BudgetCategory[]>([])
+  const [roundupSelect, setRoundupSelect] = useState('')
+  const [roundupSaving, setRoundupSaving] = useState(false)
 
-  const accountForm = useForm({
+  const accountForm = useForm<AccountInput>({
     resolver: zodResolver(accountSchema),
+    defaultValues: {
+      balance: 0,
+      isMain: false,
+      roundUpOnExpenditure: false,
+      doesRoundupSave: false,
+    },
   })
 
   const expenditureForm = useForm({
@@ -79,6 +112,28 @@ export default function AccountsPage() {
     },
   })
 
+  const transferForm = useForm<AccountTransferInput>({
+    resolver: zodResolver(accountTransferSchema),
+    defaultValues: {
+      fromAccountId: '',
+      toAccountId: '',
+      amount: 0,
+      description: '',
+    },
+  })
+
+  const fetchRoundupSettings = useCallback(async () => {
+    try {
+      const response = await fetch('/api/user/roundup-settings')
+      if (response.ok) {
+        const data = await response.json()
+        setRoundupSelect(data.roundupSavingsAccountId ?? '')
+      }
+    } catch {
+      setRoundupSelect('')
+    }
+  }, [])
+
   const fetchCategories = useCallback(async () => {
     try {
       const response = await fetch('/api/budget-categories')
@@ -97,8 +152,9 @@ export default function AccountsPage() {
     if (user && !userLoading) {
       fetchAccounts()
       fetchCategories()
+      fetchRoundupSettings()
     }
-  }, [user, userLoading, fetchCategories])
+  }, [user, userLoading, fetchCategories, fetchRoundupSettings])
 
   const fetchAccounts = async () => {
     try {
@@ -182,7 +238,6 @@ export default function AccountsPage() {
         fetchAccounts()
         expenditureForm.reset({ title: '', amount: 0, categoryId: '', accountId: '', createdAt: new Date().toISOString().slice(0, 10) })
         setShowExpenditureForm(false)
-        setSelectedAccount(null)
       } else {
         const err = await response.json()
         alert(err.error || 'Failed to create expenditure')
@@ -200,6 +255,8 @@ export default function AccountsPage() {
       type: account.type,
       balance: Number(account.balance),
       isMain: Boolean(account.isMain),
+      roundUpOnExpenditure: Boolean(account.roundUpOnExpenditure),
+      doesRoundupSave: Boolean(account.doesRoundupSave),
     })
     setShowAccountForm(true)
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -219,40 +276,65 @@ export default function AccountsPage() {
     }
   }
 
-  const handleAddExpenditure = (account: Account) => {
-    setSelectedAccount(account)
-    expenditureForm.reset({
-      title: '',
-      amount: 0,
-      categoryId: '',
-      accountId: account.id,
-      createdAt: new Date().toISOString().slice(0, 10)
-    })
-    setShowExpenditureForm(true)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  const handleDeposit = (account: Account) => {
-    setTransactionAccount(account)
+  const openDeposit = () => {
+    if (accounts.length === 0) {
+      alert('Add an account first.')
+      return
+    }
     setTransactionType('deposit')
+    setTransactionTargetAccountId(accounts[0].id)
     transactionForm.reset({ type: 'deposit', amount: 0, description: '' })
     setShowTransactionForm(true)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const handleWithdraw = (account: Account) => {
-    setTransactionAccount(account)
+  const openWithdraw = () => {
+    if (accounts.length === 0) {
+      alert('Add an account first.')
+      return
+    }
     setTransactionType('withdrawal')
+    setTransactionTargetAccountId(accounts[0].id)
     transactionForm.reset({ type: 'withdrawal', amount: 0, description: '' })
     setShowTransactionForm(true)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  const openAddExpenditure = () => {
+    expenditureForm.reset({
+      title: '',
+      amount: 0,
+      categoryId: '',
+      accountId: '',
+      createdAt: new Date().toISOString().slice(0, 10),
+    })
+    setShowExpenditureForm(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const openTransfer = () => {
+    if (accounts.length < 2) {
+      alert('You need at least two accounts to transfer.')
+      return
+    }
+    transferForm.reset({
+      fromAccountId: accounts[0].id,
+      toAccountId: accounts[1].id,
+      amount: 0,
+      description: '',
+    })
+    setShowTransferForm(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   const onTransactionSubmit = async (data: AccountTransactionInput) => {
-    if (!transactionAccount) return
+    if (!transactionTargetAccountId) {
+      alert('Choose an account.')
+      return
+    }
     setIsSubmittingTransaction(true)
     try {
-      const response = await fetch(`/api/accounts/${transactionAccount.id}/transactions`, {
+      const response = await fetch(`/api/accounts/${transactionTargetAccountId}/transactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: transactionType, amount: data.amount, description: data.description }),
@@ -261,7 +343,6 @@ export default function AccountsPage() {
         await fetchAccounts()
         transactionForm.reset({ type: transactionType, amount: 0, description: '' })
         setShowTransactionForm(false)
-        setTransactionAccount(null)
       } else {
         const err = await response.json().catch(() => ({}))
         alert(err?.error ?? 'Failed to create transaction')
@@ -273,6 +354,65 @@ export default function AccountsPage() {
       setIsSubmittingTransaction(false)
     }
   }
+
+  const onTransferSubmit = async (data: AccountTransferInput) => {
+    setIsSubmittingTransfer(true)
+    try {
+      const response = await fetch('/api/account-transfers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fromAccountId: data.fromAccountId,
+          toAccountId: data.toAccountId,
+          amount: data.amount,
+          description: data.description?.trim() || undefined,
+        }),
+      })
+      if (response.ok) {
+        await fetchAccounts()
+        transferForm.reset({
+          fromAccountId: accounts[0]?.id ?? '',
+          toAccountId: accounts[1]?.id ?? '',
+          amount: 0,
+          description: '',
+        })
+        setShowTransferForm(false)
+      } else {
+        const err = await response.json().catch(() => ({}))
+        alert(err?.error ?? 'Failed to transfer')
+      }
+    } catch (e) {
+      console.error(e)
+      alert('Failed to transfer. Please try again.')
+    } finally {
+      setIsSubmittingTransfer(false)
+    }
+  }
+
+  const saveRoundupDestination = async () => {
+    setRoundupSaving(true)
+    try {
+      const response = await fetch('/api/user/roundup-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roundupSavingsAccountId: roundupSelect === '' ? null : roundupSelect,
+        }),
+      })
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        alert(err?.error ?? 'Failed to save round-up settings')
+      }
+    } catch (e) {
+      console.error(e)
+      alert('Failed to save round-up settings.')
+    } finally {
+      setRoundupSaving(false)
+    }
+  }
+
+  const accountNameById = (id: string | null | undefined) =>
+    accounts.find((a) => a.id === id)?.name ?? 'Account'
 
   const expenditureCategories = categories
 
@@ -309,18 +449,102 @@ export default function AccountsPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Page Header */}
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Accounts</h1>
-          <button
-            onClick={() => {
-              setShowAccountForm(true)
-              window.scrollTo({ top: 0, behavior: 'smooth' })
-            }}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Account
-          </button>
+        <div className="flex flex-col gap-4 mb-6">
+          <div className="flex flex-wrap justify-between items-center gap-3">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Accounts</h1>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingAccount(null)
+                accountForm.reset({
+                  name: '',
+                  type: 'checking',
+                  balance: 0,
+                  isMain: false,
+                  roundUpOnExpenditure: false,
+                  doesRoundupSave: false,
+                })
+                setShowAccountForm(true)
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Account
+            </button>
+          </div>
+          {accounts.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={openDeposit}
+                className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center text-sm"
+              >
+                <ArrowDownCircle className="h-4 w-4 mr-2" />
+                Deposit
+              </button>
+              <button
+                type="button"
+                onClick={openWithdraw}
+                className="bg-amber-600 text-white px-4 py-2 rounded-md hover:bg-amber-700 flex items-center text-sm"
+              >
+                <ArrowUpCircle className="h-4 w-4 mr-2" />
+                Withdraw
+              </button>
+              <button
+                type="button"
+                onClick={openAddExpenditure}
+                className="border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center text-sm"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add expenditure
+              </button>
+              <button
+                type="button"
+                onClick={openTransfer}
+                className="bg-slate-600 text-white px-4 py-2 rounded-md hover:bg-slate-700 flex items-center text-sm"
+              >
+                <ArrowLeftRight className="h-4 w-4 mr-2" />
+                Transfer
+              </button>
+            </div>
+          )}
+          {accounts.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 border border-gray-200 dark:border-gray-700">
+              <h2 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Round-up savings destination</h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                When you record spending from an account with “Round up spending” enabled, spare change is moved here (see account settings below).
+              </p>
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="min-w-[200px] flex-1">
+                  <label htmlFor="roundup-destination" className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
+                    Savings account
+                  </label>
+                  <select
+                    id="roundup-destination"
+                    value={roundupSelect}
+                    onChange={(e) => setRoundupSelect(e.target.value)}
+                    className="block w-full px-3 py-2 border rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
+                  >
+                    <option value="">None</option>
+                    {accounts.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} ({acc.type})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={saveRoundupDestination}
+                  disabled={roundupSaving}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm disabled:opacity-50"
+                >
+                  {roundupSaving ? 'Saving…' : 'Save destination'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Account Form */}
@@ -403,6 +627,32 @@ export default function AccountsPage() {
                     Set as main account
                   </label>
                 </div>
+
+                <div className="md:col-span-2 space-y-2 rounded-md border border-gray-200 dark:border-gray-600 p-3 bg-gray-50 dark:bg-gray-900/40">
+                  <p className="text-xs font-medium text-gray-700 dark:text-gray-300">Round-up savings</p>
+                  <div className="flex items-start gap-2">
+                    <input
+                      {...accountForm.register('roundUpOnExpenditure')}
+                      type="checkbox"
+                      id="roundUpOnExpenditure"
+                      className="h-4 w-4 mt-0.5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="roundUpOnExpenditure" className="text-sm text-gray-700 dark:text-gray-300">
+                      Round up spending from this account to the next dollar (requires a savings destination above).
+                    </label>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <input
+                      {...accountForm.register('doesRoundupSave')}
+                      type="checkbox"
+                      id="doesRoundupSave"
+                      className="h-4 w-4 mt-0.5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="doesRoundupSave" className="text-sm text-gray-700 dark:text-gray-300">
+                      Debit round-up spare change from this account (only one account per user; if unset, the spending account is debited).
+                    </label>
+                  </div>
+                </div>
               </div>
 
               <div className="flex justify-end space-x-3">
@@ -436,11 +686,9 @@ export default function AccountsPage() {
         )}
 
         {/* Add Expenditure modal (same as Expenditures page) */}
-        {showExpenditureForm && selectedAccount && (
+        {showExpenditureForm && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
-            <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-              Add New Expenditure – {selectedAccount.name}
-            </h2>
+            <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Add expenditure</h2>
             <form onSubmit={expenditureForm.handleSubmit(onExpenditureSubmit)} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -553,14 +801,13 @@ export default function AccountsPage() {
                   onClick={() => {
                     expenditureForm.reset()
                     setShowExpenditureForm(false)
-                    setSelectedAccount(null)
                   }}
                   className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
                 >
                   Cancel
                 </button>
                 <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
-                  Add Expenditure
+                  Add expenditure
                 </button>
               </div>
             </form>
@@ -568,14 +815,31 @@ export default function AccountsPage() {
         )}
 
         {/* Deposit / Withdraw form */}
-        {showTransactionForm && transactionAccount && (
+        {showTransactionForm && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
             <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-              {transactionType === 'deposit' ? 'Deposit to' : 'Withdraw from'} – {transactionAccount.name}
+              {transactionType === 'deposit' ? 'Deposit' : 'Withdraw'}
             </h2>
             <form onSubmit={transactionForm.handleSubmit(onTransactionSubmit)} className="space-y-4">
               <input type="hidden" {...transactionForm.register('type')} />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label htmlFor="tx-account" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Account
+                  </label>
+                  <select
+                    id="tx-account"
+                    value={transactionTargetAccountId}
+                    onChange={(e) => setTransactionTargetAccountId(e.target.value)}
+                    className="mt-1 block w-full px-3 py-2 border rounded-md shadow-sm sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
+                  >
+                    {accounts.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} ({acc.type}){acc.isMain ? ' – Primary' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div>
                   <label htmlFor="tx-amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Amount
@@ -624,7 +888,6 @@ export default function AccountsPage() {
                   onClick={() => {
                     transactionForm.reset()
                     setShowTransactionForm(false)
-                    setTransactionAccount(null)
                   }}
                   className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
                 >
@@ -641,6 +904,102 @@ export default function AccountsPage() {
                   )}
                 >
                   {isSubmittingTransaction ? 'Submitting…' : transactionType === 'deposit' ? 'Deposit' : 'Withdraw'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {showTransferForm && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+            <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Transfer between accounts</h2>
+            <form onSubmit={transferForm.handleSubmit(onTransferSubmit)} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="xfer-from" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    From
+                  </label>
+                  <select
+                    id="xfer-from"
+                    {...transferForm.register('fromAccountId')}
+                    className={cn(
+                      'mt-1 block w-full px-3 py-2 border rounded-md shadow-sm sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                      transferForm.formState.errors.fromAccountId ? 'border-red-300 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+                    )}
+                  >
+                    {accounts.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} ({acc.type})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="xfer-to" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    To
+                  </label>
+                  <select
+                    id="xfer-to"
+                    {...transferForm.register('toAccountId')}
+                    className={cn(
+                      'mt-1 block w-full px-3 py-2 border rounded-md shadow-sm sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                      transferForm.formState.errors.toAccountId ? 'border-red-300 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+                    )}
+                  >
+                    {accounts.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} ({acc.type})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="xfer-amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Amount
+                  </label>
+                  <div className="mt-1 relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <DollarSign className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+                    </div>
+                    <input
+                      {...transferForm.register('amount', { valueAsNumber: true })}
+                      id="xfer-amount"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className={cn(
+                        'block w-full pl-10 pr-3 py-2 border rounded-md shadow-sm sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                        transferForm.formState.errors.amount ? 'border-red-300 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+                      )}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="xfer-note" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Note (optional)
+                  </label>
+                  <input
+                    {...transferForm.register('description')}
+                    id="xfer-note"
+                    type="text"
+                    className="mt-1 block w-full px-3 py-2 border rounded-md shadow-sm sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setShowTransferForm(false)}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingTransfer}
+                  className="px-4 py-2 bg-slate-600 text-white rounded-md hover:bg-slate-700 disabled:opacity-50"
+                >
+                  {isSubmittingTransfer ? 'Transferring…' : 'Transfer'}
                 </button>
               </div>
             </form>
@@ -700,51 +1059,44 @@ export default function AccountsPage() {
                   </p>
                 </div>
 
-                <div className="space-y-2">
-                  <button
-                    onClick={() => handleDeposit(account)}
-                    className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 flex items-center justify-center"
-                  >
-                    <ArrowDownCircle className="h-4 w-4 mr-2" />
-                    Deposit
-                  </button>
-                  <button
-                    onClick={() => handleWithdraw(account)}
-                    className="w-full bg-amber-600 text-white py-2 px-4 rounded-md hover:bg-amber-700 flex items-center justify-center"
-                  >
-                    <ArrowUpCircle className="h-4 w-4 mr-2" />
-                    Withdraw
-                  </button>
-                  <button
-                    onClick={() => handleAddExpenditure(account)}
-                    className="w-full border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-2 px-4 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center justify-center"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Expenditure
-                  </button>
-                  
+                <div className="space-y-2 mt-4">
                   {account.accountTransactions && account.accountTransactions.length > 0 && (
-                    <div className="mt-4">
+                    <div>
                       <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Recent activity</h4>
                       <div className="space-y-1">
-                        {account.accountTransactions?.slice(0, 3).map((transaction) => {
-                          const label = transaction.description.replace(/^Expenditure:\s*/i, '').trim() || transaction.description
+                        {account.accountTransactions?.slice(0, 5).map((transaction) => {
+                          const cp = transaction.counterpartyAccountId
+                          const isOut = transaction.type === 'transfer_out'
+                          const isIn = transaction.type === 'transfer_in'
+                          const label = isOut
+                            ? `Transfer → ${accountNameById(cp)}`
+                            : isIn
+                              ? `Transfer ← ${accountNameById(cp)}`
+                              : transaction.description.replace(/^Expenditure:\s*/i, '').trim() || transaction.description
+                          const isCredit =
+                            transaction.type === 'deposit' || transaction.type === 'transfer_in'
                           return (
                             <div key={transaction.id} className="flex items-center justify-between gap-2 text-sm min-w-0">
                               <div className="flex items-center space-x-2 min-w-0 overflow-hidden">
-                                {transaction.type === 'deposit' ? null : (
+                                {isIn ? (
+                                  <ArrowDownCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
+                                ) : isOut ? (
+                                  <ArrowLeftRight className="h-3 w-3 text-slate-500 flex-shrink-0" />
+                                ) : transaction.type === 'deposit' ? (
+                                  <ArrowDownCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
+                                ) : (
                                   <TrendingDown className="h-3 w-3 text-red-500 flex-shrink-0" />
                                 )}
-                                <span className="text-gray-600 dark:text-gray-400 truncate">
-                                  {label}
-                                </span>
+                                <span className="text-gray-600 dark:text-gray-400 truncate">{label}</span>
                               </div>
-                              <span className={`font-medium flex-shrink-0 ${
-                                transaction.type === 'deposit'
-                                  ? 'text-green-600 dark:text-green-400'
-                                  : 'text-red-600 dark:text-red-400'
-                              }`}>
-                                {transaction.type === 'deposit' ? '+' : '-'}${transaction.amount.toFixed(2)}
+                              <span
+                                className={`font-medium flex-shrink-0 ${
+                                  isCredit
+                                    ? 'text-green-600 dark:text-green-400'
+                                    : 'text-red-600 dark:text-red-400'
+                                }`}
+                              >
+                                {isCredit ? '+' : '-'}${transaction.amount.toFixed(2)}
                               </span>
                             </div>
                           )

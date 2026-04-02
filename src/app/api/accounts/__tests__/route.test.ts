@@ -111,6 +111,33 @@ describe('/api/accounts', () => {
       })
     })
 
+    it('clears doesRoundupSave on other accounts when doesRoundupSave is true', async () => {
+      mockPrisma.account.updateMany.mockResolvedValue({} as any)
+      mockPrisma.account.create.mockResolvedValue({ id: 'acc-new' } as any)
+
+      const req = {
+        json: jest.fn().mockResolvedValue({
+          name: 'Checking',
+          type: 'checking',
+          balance: 0,
+          isMain: false,
+          doesRoundupSave: true,
+        }),
+      } as unknown as NextRequest
+
+      await POST(req)
+
+      expect(mockPrisma.account.updateMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+        data: { doesRoundupSave: false },
+      })
+      expect(mockPrisma.account.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ doesRoundupSave: true }),
+        })
+      )
+    })
+
     it('returns 500 on validation error', async () => {
       const req = {
         json: jest.fn().mockResolvedValue({ name: '', type: 'depository' }),

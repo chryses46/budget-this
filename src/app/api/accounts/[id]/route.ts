@@ -15,7 +15,17 @@ export async function PUT(
 
     const { id } = await params
     const body = await request.json()
-    const { name, type, subtype, institution, institutionId, balance, isMain } = updateAccountSchema.parse(body)
+    const {
+      name,
+      type,
+      subtype,
+      institution,
+      institutionId,
+      balance,
+      isMain,
+      roundUpOnExpenditure,
+      doesRoundupSave,
+    } = updateAccountSchema.parse(body)
 
     // If this is being set as main account, unset other main accounts
     if (isMain) {
@@ -25,9 +35,26 @@ export async function PUT(
       })
     }
 
+    if (doesRoundupSave === true) {
+      await prisma.account.updateMany({
+        where: { userId, id: { not: id } },
+        data: { doesRoundupSave: false }
+      })
+    }
+
     const account = await prisma.account.update({
       where: { id, userId },
-      data: { name, type, subtype, institution, institutionId, balance, isMain },
+      data: {
+        name,
+        type,
+        subtype,
+        institution,
+        institutionId,
+        balance,
+        isMain,
+        roundUpOnExpenditure,
+        doesRoundupSave,
+      },
       include: {
         accountTransactions: {
           orderBy: { createdAt: 'desc' },

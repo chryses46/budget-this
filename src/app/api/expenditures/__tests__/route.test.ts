@@ -5,35 +5,77 @@ import { requireApiAuth } from '@/lib/api-auth'
 import { NextResponse } from 'next/server'
 
 jest.mock('@/lib/api-auth', () => ({ requireApiAuth: jest.fn() }))
-jest.mock('@/lib/prisma', () => {
-  const mockTx = {
-    expenditure: { create: jest.fn().mockResolvedValue({ id: 'exp-1' }) },
-    accountTransaction: { create: jest.fn().mockResolvedValue({}) },
-    account: { update: jest.fn().mockResolvedValue({}) },
-  }
-  return {
-    prisma: {
-      expenditure: { findMany: jest.fn(), count: jest.fn() },
-      account: { findFirst: jest.fn() },
-      $transaction: jest.fn((fn: (tx: any) => Promise<any>) => fn(mockTx)),
-    },
-  }
-})
+
+jest.mock('@/lib/prisma', () => ({
+  prisma: {
+    expenditure: { findMany: jest.fn(), count: jest.fn() },
+    account: { findFirst: jest.fn() },
+    $transaction: jest.fn(),
+  },
+}))
 
 const mockRequireApiAuth = requireApiAuth as jest.MockedFunction<typeof requireApiAuth>
 const mockPrisma = prisma as jest.Mocked<typeof prisma>
 
+function buildTxMock(opts: {
+  userRoundup?: string | null
+  eff: { id: string; balance: number; roundUpOnExpenditure: boolean }
+  accountFindFirst?: jest.Mock
+  accountFindUnique?: jest.Mock
+}) {
+  const accountTransactionCreate = jest.fn().mockResolvedValue({})
+  const expenditureCreate = jest.fn().mockResolvedValue({ id: 'exp-1' })
+  const accountUpdate = jest.fn().mockResolvedValue({})
+  const userFindUnique = jest
+    .fn()
+    .mockResolvedValue({ roundupSavingsAccountId: opts.userRoundup ?? null })
+
+  const accountFindFirst =
+    opts.accountFindFirst ??
+    jest.fn().mockResolvedValue(opts.eff)
+
+  const accountFindUnique =
+    opts.accountFindUnique ??
+    jest.fn().mockImplementation(async (args: { where: { id: string } }) => ({
+      id: args.where.id,
+      balance: 500,
+    }))
+
+  const mockTx = {
+    user: { findUnique: userFindUnique },
+    expenditure: { create: expenditureCreate },
+    accountTransaction: { create: accountTransactionCreate },
+    account: {
+      findFirst: accountFindFirst,
+      findUnique: accountFindUnique,
+      update: accountUpdate,
+    },
+  }
+
+  return { mockTx, accountTransactionCreate }
+}
+
 describe('/api/expenditures', () => {
   beforeEach(() => {
-    jest.clearAllMocks()
+    mockRequireApiAuth.mockReset()
     mockRequireApiAuth.mockResolvedValue({ userId: 'user-1' })
+    mockPrisma.expenditure.findMany.mockReset()
+    mockPrisma.expenditure.count.mockReset()
+    mockPrisma.account.findFirst.mockReset()
+    mockPrisma.$transaction.mockReset()
+    mockPrisma.$transaction.mockImplementation((fn: (tx: unknown) => Promise<unknown>) => {
+      const { mockTx } = buildTxMock({
+        eff: { id: 'acc-1', balance: 1000, roundUpOnExpenditure: false },
+      })
+      return fn(mockTx)
+    })
   })
 
   describe('GET', () => {
     it('returns expenditures with pagination', async () => {
       mockPrisma.expenditure.findMany.mockResolvedValue([
         { id: 'exp-1', title: 'Coffee', userId: 'user-1' },
-      ] as any)
+      ] as never)
       mockPrisma.expenditure.count.mockResolvedValue(1)
 
       const req = {
@@ -128,9 +170,17 @@ describe('/api/expenditures', () => {
 
   describe('POST', () => {
     it('creates expenditure successfully', async () => {
-      mockPrisma.account.findFirst
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({ id: 'acc-1' } as any)
+      let accountTransactionCreate: jest.Mock = jest.fn()
+      // No accountId in body → first findFirst is primary account lookup
+      mockPrisma.account.findFirst.mockResolvedValueOnce({ id: 'acc-1' } as never)
+
+      mockPrisma.$transaction.mockImplementation((fn: (tx: unknown) => Promise<unknown>) => {
+        const built = buildTxMock({
+          eff: { id: 'acc-1', balance: 1000, roundUpOnExpenditure: false },
+        })
+        accountTransactionCreate = built.accountTransactionCreate
+        return fn(built.mockTx)
+      })
 
       const req = {
         json: jest.fn().mockResolvedValue({
@@ -146,11 +196,19 @@ describe('/api/expenditures', () => {
       expect(res.status).toBe(200)
       expect(data.id).toBe('exp-1')
       expect(mockPrisma.$transaction).toHaveBeenCalled()
+      expect(accountTransactionCreate).toHaveBeenCalledTimes(1)
     })
 
     it('uses body accountId when valid for user', async () => {
       const accountId = 'a1b2c3d4-e5f6-4789-a012-3456789abcde'
-      mockPrisma.account.findFirst.mockResolvedValueOnce({ id: accountId } as any)
+      mockPrisma.account.findFirst.mockResolvedValueOnce({ id: accountId } as never)
+
+      mockPrisma.$transaction.mockImplementation((fn: (tx: unknown) => Promise<unknown>) => {
+        const built = buildTxMock({
+          eff: { id: accountId, balance: 1000, roundUpOnExpenditure: false },
+        })
+        return fn(built.mockTx)
+      })
 
       const req = {
         json: jest.fn().mockResolvedValue({
@@ -169,7 +227,7 @@ describe('/api/expenditures', () => {
       })
     })
 
-    it('returns 500 on validation error', async () => {
+    it('returns 400 on validation error', async () => {
       const req = {
         json: jest.fn().mockResolvedValue({
           title: '',
@@ -179,8 +237,79 @@ describe('/api/expenditures', () => {
       } as unknown as NextRequest
       const res = await POST(req)
       const data = await res.json()
-      expect(res.status).toBe(500)
-      expect(data.error).toBe('Failed to create expenditure')
+      expect(res.status).toBe(400)
+      expect(data.error).toBeDefined()
+    })
+
+    it('creates round-up deposit and extra withdrawal when configured', async () => {
+      const savingsId = 'b2c3d4e5-f6a7-4890-b123-456789abcdef'
+      mockPrisma.account.findFirst.mockResolvedValueOnce({ id: 'acc-1' } as never)
+
+      const findFirst = jest
+        .fn()
+        .mockResolvedValueOnce({
+          id: 'acc-1',
+          balance: 100,
+          roundUpOnExpenditure: true,
+        })
+        .mockResolvedValueOnce({ id: savingsId })
+        .mockResolvedValueOnce(null)
+
+      const findUnique = jest
+        .fn()
+        .mockResolvedValueOnce({ id: 'acc-1', balance: 100 })
+        .mockResolvedValueOnce({ id: savingsId, balance: 0 })
+
+      let accountTransactionCreate: jest.Mock = jest.fn()
+      mockPrisma.$transaction.mockImplementation((fn: (tx: unknown) => Promise<unknown>) => {
+        const built = buildTxMock({
+          userRoundup: savingsId,
+          eff: { id: 'acc-1', balance: 100, roundUpOnExpenditure: true },
+          accountFindFirst: findFirst,
+          accountFindUnique: findUnique,
+        })
+        accountTransactionCreate = built.accountTransactionCreate
+        return fn(built.mockTx)
+      })
+
+      const req = {
+        json: jest.fn().mockResolvedValue({
+          title: 'Coffee',
+          amount: 3.45,
+          categoryId: 'cat-1',
+        }),
+      } as unknown as NextRequest
+
+      const res = await POST(req)
+      expect(res.status).toBe(200)
+      expect(accountTransactionCreate).toHaveBeenCalledTimes(3)
+    })
+
+    it('skips round-up when amount is already a whole dollar', async () => {
+      const savingsId = 'b2c3d4e5-f6a7-4890-b123-456789abcdef'
+      mockPrisma.account.findFirst.mockResolvedValueOnce({ id: 'acc-1' } as never)
+
+      let accountTransactionCreate: jest.Mock = jest.fn()
+      mockPrisma.$transaction.mockImplementation((fn: (tx: unknown) => Promise<unknown>) => {
+        const built = buildTxMock({
+          userRoundup: savingsId,
+          eff: { id: 'acc-1', balance: 100, roundUpOnExpenditure: true },
+        })
+        accountTransactionCreate = built.accountTransactionCreate
+        return fn(built.mockTx)
+      })
+
+      const req = {
+        json: jest.fn().mockResolvedValue({
+          title: 'Coffee',
+          amount: 5,
+          categoryId: 'cat-1',
+        }),
+      } as unknown as NextRequest
+
+      const res = await POST(req)
+      expect(res.status).toBe(200)
+      expect(accountTransactionCreate).toHaveBeenCalledTimes(1)
     })
   })
 })

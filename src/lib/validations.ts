@@ -114,9 +114,27 @@ export const accountSchema = z.object({
   institutionId: z.string().optional(),
   balance: z.number().min(0, 'Balance must be non-negative').optional().default(0),
   isMain: z.boolean().optional().default(false),
+  roundUpOnExpenditure: z.boolean().optional().default(false),
+  doesRoundupSave: z.boolean().optional().default(false),
 })
 
 export const updateAccountSchema = accountSchema.partial()
+
+export const roundupSettingsSchema = z.object({
+  roundupSavingsAccountId: z.union([z.string().uuid(), z.null()]),
+})
+
+export const accountTransferSchema = z
+  .object({
+    fromAccountId: z.string().uuid(),
+    toAccountId: z.string().uuid(),
+    amount: z.number().positive('Amount must be positive'),
+    description: z.string().optional(),
+  })
+  .refine((d) => d.fromAccountId !== d.toAccountId, {
+    message: 'Source and destination must differ',
+    path: ['toAccountId'],
+  })
 
 // Account Transaction schemas
 export const accountTransactionSchema = z.object({
@@ -133,3 +151,5 @@ export type PlaidAccountInput = z.infer<typeof plaidAccountSchema>
 export type UpdateAccountInput = z.infer<typeof updateAccountSchema>
 export type AccountTransactionInput = z.infer<typeof accountTransactionSchema>
 export type UpdateAccountTransactionInput = z.infer<typeof updateAccountTransactionSchema>
+export type RoundupSettingsInput = z.infer<typeof roundupSettingsSchema>
+export type AccountTransferInput = z.infer<typeof accountTransferSchema>
