@@ -38,13 +38,30 @@ export async function POST(request: NextRequest) {
     const { userId } = auth
 
     const body = await request.json()
-    const { name, type, subtype, institution, institutionId, balance, isMain } = accountSchema.parse(body)
+    const {
+      name,
+      type,
+      subtype,
+      institution,
+      institutionId,
+      balance,
+      isMain,
+      roundUpOnExpenditure,
+      doesRoundupSave,
+    } = accountSchema.parse(body)
 
     // If this is being set as main account, unset other main accounts
     if (isMain) {
       await prisma.account.updateMany({
         where: { userId, isMain: true },
         data: { isMain: false }
+      })
+    }
+
+    if (doesRoundupSave) {
+      await prisma.account.updateMany({
+        where: { userId },
+        data: { doesRoundupSave: false }
       })
     }
 
@@ -57,6 +74,8 @@ export async function POST(request: NextRequest) {
         institutionId,
         balance,
         isMain,
+        roundUpOnExpenditure,
+        doesRoundupSave,
         userId
       },
       include: {

@@ -5,9 +5,12 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// `migrate dev` needs a shadow DB. Hosts like RDS often deny CREATE DATABASE; set SHADOW_DATABASE_URL
+// to a separate empty database on the same server (CREATE DATABASE prisma_shadow; grant your user access).
 datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
+  provider          = "mysql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 enum Frequency {
@@ -48,6 +51,8 @@ model User {
   accountTransactions AccountTransaction[]
   mfaCodes            MfaCode[]
   apiKeys             ApiKey[]
+  roundupSavingsAccountId String?  @unique
+  roundupSavingsAccount   Account? @relation("UserRoundupSavings", fields: [roundupSavingsAccountId], references: [id], onDelete: SetNull)
 
   @@map("users")
 }
@@ -141,11 +146,14 @@ model Account {
   institution   String?
   institutionId String?
   balance       Float    @default(0)
-  isMain        Boolean  @default(false)
-  userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  isMain                 Boolean  @default(false)
+  roundUpOnExpenditure   Boolean  @default(false)
+  doesRoundupSave        Boolean  @default(false)
+  userId                 String
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  userRoundupSavings     User?    @relation("UserRoundupSavings")
 
   transactions        Transaction[]
   accountTransactions AccountTransaction[]
@@ -183,16 +191,18 @@ model Transaction {
 }
 
 model AccountTransaction {
-  id          String   @id @default(uuid())
-  accountId   String
-  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  type        String   // deposit, withdrawal
-  amount      Float
-  description String
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                     String   @id @default(uuid())
+  accountId              String
+  account                Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  type                   String   // deposit, withdrawal, transfer_out, transfer_in
+  amount                 Float
+  description            String
+  transferPairId         String?
+  counterpartyAccountId  String?
+  userId                 String
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
   @@map("account_transactions")
 }

@@ -54,6 +54,24 @@ describe('/api/accounts/[id]', () => {
       )
     })
 
+    it('clears doesRoundupSave on other accounts when set to true', async () => {
+      mockPrisma.account.updateMany.mockResolvedValue({} as any)
+      mockPrisma.account.update.mockResolvedValue({ id: 'acc-1' } as any)
+
+      const req = {
+        json: jest.fn().mockResolvedValue({
+          doesRoundupSave: true,
+        }),
+      } as unknown as NextRequest
+
+      await PUT(req, { params: params() })
+
+      expect(mockPrisma.account.updateMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1', id: { not: 'acc-1' } },
+        data: { doesRoundupSave: false },
+      })
+    })
+
     it('returns 401 when not authenticated', async () => {
       mockRequireApiAuth.mockResolvedValue(
         NextResponse.json({ error: 'Authentication required' }, { status: 401 })
