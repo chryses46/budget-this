@@ -184,11 +184,11 @@ export async function POST(request: NextRequest) {
           })
           const sourceId = designatedSource?.id ?? effFull!.id
 
-          let sourceAcc = await tx.account.findUnique({
+          const sourceAcc = await tx.account.findUnique({
             where: { id: sourceId },
             select: { id: true, balance: true }
           })
-          let destAcc = await tx.account.findUnique({
+          const destAcc = await tx.account.findUnique({
             where: { id: savingsRow.id },
             select: { id: true, balance: true }
           })
