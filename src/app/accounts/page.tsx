@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
 import {
@@ -83,7 +83,7 @@ export default function AccountsPage() {
   const [roundupSaving, setRoundupSaving] = useState(false)
 
   const accountForm = useForm<AccountInput>({
-    resolver: zodResolver(accountSchema),
+    resolver: zodResolver(accountSchema) as Resolver<AccountInput>,
     defaultValues: {
       balance: 0,
       isMain: false,
